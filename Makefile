@@ -2,9 +2,7 @@ GOPATH_BIN := $(shell go env GOPATH)/bin
 GOLANGCI_LINT := $(GOPATH_BIN)/golangci-lint
 GOIMPORTS := $(GOPATH_BIN)/goimports
 
-GOMOBILE_PKGS := ./mobile
-
-.PHONY: fmt lint vet test test-integration build tidy check gomobile-bind gomobile-bind-ios
+.PHONY: fmt lint vet test test-integration build tidy check
 
 fmt:
 	$(GOIMPORTS) -w -local github.com/Hinkal-Protocol/hinkal-go .

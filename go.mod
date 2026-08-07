@@ -12,7 +12,6 @@ require (
 	github.com/iden3/go-iden3-crypto v0.0.17
 	github.com/mr-tron/base58 v1.3.0
 	golang.org/x/crypto v0.53.0
-	golang.org/x/mobile v0.0.0-20260611195102-4dd8f1dbf5d2
 	golang.org/x/sync v0.21.0
 )
 
@@ -61,9 +60,8 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/ratelimit v0.3.1 // indirect
 	go.uber.org/zap v1.27.1 // indirect
-	golang.org/x/mod v0.37.0 // indirect
+	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/sys v0.46.0 // indirect
 	golang.org/x/term v0.44.0 // indirect
 	golang.org/x/time v0.12.0 // indirect
-	golang.org/x/tools v0.46.0 // indirect
 )
