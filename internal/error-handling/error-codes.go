@@ -1,0 +1,31 @@
+package errorhandling
+
+import "errors"
+
+var (
+	ErrTransactionNotConfirmed  = errors.New("the transaction was not confirmed by the network. Please, try again")
+	ErrTransactionTimeout       = errors.New("your transaction got stale. Please, try in a few seconds")
+	ErrTransactionReplaced      = errors.New("transaction was replaced")
+	ErrTransactionCanceled      = errors.New("transaction was cancelled. Please try again")
+	ErrSigningFailed            = errors.New("the signing failed. Please, try again")
+	ErrUserRejectedTx           = errors.New("transaction rejected")
+	ErrUserRejectedSign         = errors.New("user rejected signing")
+	ErrSimulationFailed         = errors.New("simulation failed:")
+	ErrUnsupportedNetwork       = errors.New("the selected network is not supported. Please switch to another network to continue.")
+	ErrInvalidNullifier         = errors.New("nullifier cannot be reused")
+	ErrSanctionedAddress        = errors.New("address is sanctioned")
+	ErrInvalidAmount            = errors.New("please, select correct amount")
+	ErrInvalidToken             = errors.New("invalid token provided")
+	ErrInvalidZKP               = errors.New("proof must be valid")
+	ErrInvalidRelayerFee        = errors.New("relayer fee amount is not valid")
+	ErrRelayerNotAvailable      = errors.New("all relayers are busy, please try in a few seconds")
+	ErrRelayerGasEstimate       = errors.New("relayer was not able to estimate the gas costs of tx. Please, try later")
+	ErrRecipientFormatIncorrect = errors.New("recipient information format is incorrect")
+	ErrRecipientAmountInvalid   = errors.New("recipient amount is invalid")
+	ErrNotEnoughTokens          = errors.New("transfer amount exceeds balance")
+	ErrTokensDifferentChains    = errors.New("tokens belong to different chains. All tokens must belong to the same chain")
+	ErrEmptyTokenArray          = errors.New("token array cannot be empty")
+	ErrNonceHigh                = errors.New("nonce too high")
+	ErrLowOutputAmount          = errors.New("gas fees exceed received amount. Please try adjusting amount or lowering slippage.")
+	ErrSomeError                = errors.New("some error has occurred. Please try again in a few minutes. If the issue persists, please report it in Discord")
+)
