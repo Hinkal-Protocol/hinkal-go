@@ -18,8 +18,9 @@ func StoreClaimableKeyInEnclave(
 	shieldedPrivateKey string,
 	chainID int,
 	claimableSignature string,
+	senderSignature string,
 ) error {
-	payload, err := claimableKeyPayload(shieldedPrivateKey, senderAddress, claimableSignature)
+	payload, err := claimableKeyPayload(shieldedPrivateKey, senderAddress, claimableSignature, recipientEthAddress, chainID, senderSignature)
 	if err != nil {
 		return err
 	}
@@ -29,7 +30,7 @@ func StoreClaimableKeyInEnclave(
 		return err
 	}
 
-	_, err = api.StoreClaimableKeyEnclaveCall(ctx, recipientEthAddress, handshake.InputCiphertext, handshake.KeyCiphertext, chainID)
+	_, err = api.StoreClaimableKeyEnclaveCall(ctx, handshake.InputCiphertext, handshake.KeyCiphertext)
 	return err
 }
 
@@ -85,18 +86,25 @@ func fetchUtxosFromEnclave(
 	return deduplicateUtxosByCommitment(items)
 }
 
-func claimableKeyPayload(shieldedPrivateKey, senderAddress, claimableSignature string) ([]byte, error) {
+// claimableKeyPayload bundles recovery, routing, and signature fields into one authenticated envelope.
+func claimableKeyPayload(shieldedPrivateKey, senderAddress, claimableSignature, recipientEthAddress string, chainID int, senderSignature string) ([]byte, error) {
 	if shieldedPrivateKey == "" {
 		return nil, fmt.Errorf("claimable UTXO is missing its shielded private key")
 	}
 	return json.Marshal(struct {
-		ShieldedPrivateKey string `json:"shieldedPrivateKey"`
-		ClaimableSignature string `json:"claimableSignature,omitempty"`
-		SenderAddress      string `json:"senderAddress"`
+		ShieldedPrivateKey  string `json:"shieldedPrivateKey"`
+		ClaimableSignature  string `json:"claimableSignature,omitempty"`
+		SenderAddress       string `json:"senderAddress"`
+		RecipientEthAddress string `json:"recipientEthAddress"`
+		ChainID             int    `json:"chainId"`
+		SenderSignature     string `json:"senderSignature"`
 	}{
-		ShieldedPrivateKey: shieldedPrivateKey,
-		ClaimableSignature: claimableSignature,
-		SenderAddress:      senderAddress,
+		ShieldedPrivateKey:  shieldedPrivateKey,
+		ClaimableSignature:  claimableSignature,
+		SenderAddress:       senderAddress,
+		RecipientEthAddress: recipientEthAddress,
+		ChainID:             chainID,
+		SenderSignature:     senderSignature,
 	})
 }
 

@@ -70,12 +70,10 @@ type StoreClaimableKeyResponse struct {
 	Status string `json:"status"`
 }
 
-func StoreClaimableKeyEnclaveCall(ctx context.Context, recipientEthAddress, encryptedMaterial, key string, chainID int) (*StoreClaimableKeyResponse, error) {
+func StoreClaimableKeyEnclaveCall(ctx context.Context, encryptedMaterial, key string) (*StoreClaimableKeyResponse, error) {
 	body := map[string]any{
-		"recipientEthAddress": recipientEthAddress,
-		"encryptedMaterial":   encryptedMaterial,
-		"key":                 key,
-		"chainId":             chainID,
+		"encryptedMaterial": encryptedMaterial,
+		"key":               key,
 	}
 	var resp StoreClaimableKeyResponse
 	if err := Post(ctx, constants.GetEnclaveURL()+constants.EnclaveConfig.StoreClaimableKey, body, &resp); err != nil {

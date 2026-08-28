@@ -15,7 +15,11 @@ func (h *Hinkal) StoreClaimableKeyInEnclave(
 	chainID int,
 	claimableSignature string,
 ) error {
-	return enclave.StoreClaimableKeyInEnclave(ctx, senderAddress, recipientEthAddress, shieldedPrivateKey, chainID, claimableSignature)
+	senderSignature, err := h.UserKeys.GetSignature()
+	if err != nil {
+		return err
+	}
+	return enclave.StoreClaimableKeyInEnclave(ctx, senderAddress, recipientEthAddress, shieldedPrivateKey, chainID, claimableSignature, senderSignature)
 }
 
 func (h *Hinkal) GetUtxosFromEnclave(
