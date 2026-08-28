@@ -11,25 +11,25 @@ import (
 	"github.com/Hinkal-Protocol/hinkal-go/internal/types"
 )
 
-func StoreUtxoInEnclave(
+func StoreClaimableKeyInEnclave(
 	ctx context.Context,
 	senderAddress string,
 	recipientEthAddress string,
-	u *utxo.Utxo,
+	shieldedPrivateKey string,
 	chainID int,
 	claimableSignature string,
 ) error {
-	payload, err := enclaveUtxoPayload(u.GetConstructableParams(), senderAddress, claimableSignature)
+	payload, err := claimableKeyPayload(shieldedPrivateKey, senderAddress, claimableSignature)
 	if err != nil {
 		return err
 	}
 
-	keyCiphertext, inputCiphertext, err := MakeHandshakeAndEncrypt(ctx, payload)
+	handshake, err := MakeHandshakeAndEncrypt(ctx, payload)
 	if err != nil {
 		return err
 	}
 
-	_, err = api.StoreUtxoEnclaveCall(ctx, recipientEthAddress, inputCiphertext, keyCiphertext, chainID)
+	_, err = api.StoreClaimableKeyEnclaveCall(ctx, recipientEthAddress, handshake.InputCiphertext, handshake.KeyCiphertext, chainID)
 	return err
 }
 
@@ -38,10 +38,8 @@ func GetUtxosFromEnclave(
 	ethAddress string,
 	signature string,
 	chainID int,
-	isSolanaLedger bool,
-	txMessageForSolanaLedger string,
 ) ([]types.UtxoConstructorParamsWithSenderAddress, error) {
-	items, err := fetchUtxosFromEnclave(ctx, ethAddress, signature, chainID, isSolanaLedger, txMessageForSolanaLedger)
+	items, err := fetchUtxosFromEnclave(ctx, ethAddress, signature, chainID)
 	if err != nil {
 		log.Printf("failed to fetch utxos from gcp: %v", err)
 		return []types.UtxoConstructorParamsWithSenderAddress{}, nil
@@ -54,23 +52,23 @@ func fetchUtxosFromEnclave(
 	ethAddress string,
 	signature string,
 	chainID int,
-	isSolanaLedger bool,
-	txMessageForSolanaLedger string,
 ) ([]types.UtxoConstructorParamsWithSenderAddress, error) {
-	keyCiphertext, inputCiphertext, err := MakeHandshakeAndEncrypt(ctx, []byte(signature))
+	handshake, err := MakeHandshakeAndEncrypt(ctx, []byte(signature))
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := api.GetUtxosEnclaveCall(
+	raw, err := api.GetUtxosEnclaveCall(
 		ctx,
 		ethAddress,
-		inputCiphertext,
-		keyCiphertext,
+		handshake.InputCiphertext,
+		handshake.KeyCiphertext,
 		chainID,
-		isSolanaLedger,
-		txMessageForSolanaLedger,
 	)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := OpenSealedResponse[api.GetUtxosResponse](raw, handshake.Key)
 	if err != nil {
 		return nil, err
 	}
@@ -87,20 +85,19 @@ func fetchUtxosFromEnclave(
 	return deduplicateUtxosByCommitment(items)
 }
 
-func enclaveUtxoPayload(params types.UtxoParams, senderAddress, claimableSignature string) ([]byte, error) {
-	base, err := json.Marshal(params)
-	if err != nil {
-		return nil, err
+func claimableKeyPayload(shieldedPrivateKey, senderAddress, claimableSignature string) ([]byte, error) {
+	if shieldedPrivateKey == "" {
+		return nil, fmt.Errorf("claimable UTXO is missing its shielded private key")
 	}
-	var payload map[string]any
-	if err := json.Unmarshal(base, &payload); err != nil {
-		return nil, err
-	}
-	payload["senderAddress"] = senderAddress
-	if claimableSignature != "" {
-		payload["claimableSignature"] = claimableSignature
-	}
-	return json.Marshal(payload)
+	return json.Marshal(struct {
+		ShieldedPrivateKey string `json:"shieldedPrivateKey"`
+		ClaimableSignature string `json:"claimableSignature,omitempty"`
+		SenderAddress      string `json:"senderAddress"`
+	}{
+		ShieldedPrivateKey: shieldedPrivateKey,
+		ClaimableSignature: claimableSignature,
+		SenderAddress:      senderAddress,
+	})
 }
 
 func parseEnclaveUtxoResponse(raw json.RawMessage) (types.UtxoConstructorParamsWithSenderAddress, error) {
@@ -112,7 +109,6 @@ func parseEnclaveUtxoResponse(raw json.RawMessage) (types.UtxoConstructorParamsW
 	var meta struct {
 		SenderAddress      string `json:"senderAddress"`
 		ClaimableSignature string `json:"claimableSignature"`
-		ShieldedPrivateKey string `json:"shieldedPrivateKey"`
 	}
 	if err := json.Unmarshal(raw, &meta); err != nil {
 		return types.UtxoConstructorParamsWithSenderAddress{}, err
@@ -122,7 +118,6 @@ func parseEnclaveUtxoResponse(raw json.RawMessage) (types.UtxoConstructorParamsW
 		UtxoParams:         params,
 		SenderAddress:      meta.SenderAddress,
 		ClaimableSignature: meta.ClaimableSignature,
-		ShieldedPrivateKey: meta.ShieldedPrivateKey,
 	}, nil
 }
 

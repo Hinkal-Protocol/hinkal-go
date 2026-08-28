@@ -2,22 +2,23 @@ package transactions
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"math/big"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/Hinkal-Protocol/hinkal-go/internal/api"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
-	cryptokeys "github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/crypto-keys"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/hinkal/ihinkal"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/utxo"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/balance"
+	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/enclave"
 	pretransaction "github.com/Hinkal-Protocol/hinkal-go/internal/functions/pre-transaction"
-	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/snarkjs"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/utils"
-	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/web3"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/types"
 )
 
@@ -27,6 +28,8 @@ var (
 	errWithdrawStuckNoToken       = errors.New("transactions: withdrawStuckUtxos action: no token found")
 	errWithdrawStuckTooManyTokens = errors.New("transactions: withdrawStuckUtxos supports one token")
 	errWithdrawStuckNoUtxos       = errors.New("transactions: withdrawStuckUtxos no stuck UTXOs found")
+	errNoStuckBalanceToWithdraw   = errors.New("No stuck balance found to withdraw")
+	errInsufficientRecoveryFees   = errors.New("Insufficient funds to cover recovery fees")
 )
 
 func countStuckUtxoAmount(utxos []*utxo.Utxo) *big.Int {
@@ -99,25 +102,6 @@ func positiveStuckUtxosForToken(
 	return sortStuckUtxos(positiveUtxos), nil
 }
 
-func getSolanaStuckInputAndOutputUtxos(
-	ctx context.Context,
-	hinkal ihinkal.HinkalInternal,
-	chainID int,
-	mintAddresses []string,
-	amountChanges []*big.Int,
-) ([]*utxo.Utxo, []*utxo.Utxo, error) {
-	inputUtxosArray, err := balance.AddPaddingToUtxos(ctx, hinkal, chainID, mintAddresses, amountChanges, maxStuckUtxosPerTx, false, true)
-	if err != nil {
-		return nil, nil, err
-	}
-	timeStamp := new(big.Int).SetInt64(utils.GetCurrentTimeInSeconds()).String()
-	outputUtxos, err := pretransaction.OutputUtxoProcessing(hinkal.GetUserKeys(), inputUtxosArray[0], amountChanges[0], timeStamp, true, "", nil)
-	if err != nil {
-		return nil, nil, err
-	}
-	return inputUtxosArray[0], outputUtxos, nil
-}
-
 func markNullifiersSpent(hinkal ihinkal.HinkalInternal, chainID int, inputNullifiers [][]string) {
 	nullifiers := hinkal.Nullifiers(chainID)
 	if nullifiers == nil {
@@ -130,25 +114,6 @@ func markNullifiersSpent(hinkal ihinkal.HinkalInternal, chainID int, inputNullif
 			}
 		}
 	}
-}
-
-func markInputUtxosSpent(hinkal ihinkal.HinkalInternal, chainID int, inputUtxosArray [][]*utxo.Utxo) {
-	inputNullifiers := make([][]string, 0, len(inputUtxosArray))
-	for _, inputUtxos := range inputUtxosArray {
-		perToken := make([]string, 0, len(inputUtxos))
-		for _, inputUtxo := range inputUtxos {
-			if inputUtxo.Amount == nil || inputUtxo.Amount.Sign() == 0 {
-				continue
-			}
-			nullifier, err := inputUtxo.GetNullifier()
-			if err != nil {
-				continue
-			}
-			perToken = append(perToken, nullifier)
-		}
-		inputNullifiers = append(inputNullifiers, perToken)
-	}
-	markNullifiersSpent(hinkal, chainID, inputNullifiers)
 }
 
 func withdrawSingleStuckToken(
@@ -237,83 +202,33 @@ func withdrawSingleStuckTokenSolana(
 	amountChanges := []*big.Int{new(big.Int).Neg(amountToRecipient)}
 	amountChanges[0] = new(big.Int).Sub(amountChanges[0], feeStructure.FlatFee)
 
-	inputUtxos, outputUtxos, err := getSolanaStuckInputAndOutputUtxos(ctx, hinkal, chainID, mintAddresses, amountChanges)
-	if err != nil {
-		return "", nil, err
-	}
-
-	shieldedPrivateKey, err := hinkal.GetUserKeys().GetShieldedPrivateKey()
-	if err != nil {
-		return "", nil, err
-	}
-	randSeed, err := utils.RandomBigInt(31)
-	if err != nil {
-		return "", nil, err
-	}
-	extraRandomization, err := cryptokeys.FindCorrectRandomization(randSeed, shieldedPrivateKey)
-	if err != nil {
-		return "", nil, err
-	}
-	encryptedOutputBytes, encryptedOutputInts, err := solanaEncryptedOutputBytes(outputUtxos)
-	if err != nil {
-		return "", nil, err
-	}
-	inputUtxosArray := [][]*utxo.Utxo{inputUtxos}
-	outputUtxosArray := [][]*utxo.Utxo{outputUtxos}
-	if err := pretransaction.EnsureAmountChanges(inputUtxosArray, outputUtxosArray, amountChanges); err != nil {
-		return "", nil, err
-	}
-
-	dimensions := types.DimDataType{
-		TokenNumber:     len(mintAddresses),
-		NullifierAmount: len(inputUtxos),
-		OutputAmount:    len(outputUtxos),
-	}
-	proof, err := snarkjs.ConstructSolanaZkProof(ctx, snarkjs.ConstructSolanaZkProofParams{
-		GenerateProofRemotely: hinkal.GenerateProofRemotely(),
-		MerkleTree:            hinkal.MerkleTree(chainID),
-		UserKeys:              hinkal.GetUserKeys(),
-		MintAddresses:         mintAddresses,
-		InputUtxos:            inputUtxosArray,
-		OutputUtxos:           outputUtxosArray,
-		ExtraRandomization:    extraRandomization,
-		RelayerFee:            feeStructure.FlatFee,
-		VariableRate:          feeStructure.VariableRate,
-		RecipientAddress:      recipientAddress,
-		SignerAddress:         relay,
-		Dimensions:            dimensions,
-		EncryptedOutputs:      encryptedOutputBytes,
-		ChainID:               chainID,
-	})
-	if err != nil {
-		return "", nil, err
-	}
 	accounts := api.SolanaTransactAccounts{Recipient: recipientAddress}
 	if !strings.EqualFold(mintAddresses[0], constants.SolanaNativeAddress) {
 		accounts.Mint = mintAddresses[0]
 	}
 
-	txHash, err := web3.SolanaTransactCallRelayer(ctx, api.SolanaTransactionBody{
-		ChainID:      chainID,
-		RelayAddress: relay,
-		FunctionName: "transact",
-		Args: api.SolanaArgs{
-			ProofAArr:        proof.ProofAArr,
-			ProofBArr:        proof.ProofBArr,
-			ProofCArr:        proof.ProofCArr,
-			PublicInputsArr:  proof.PublicInputsArr,
-			EncryptedOutputs: encryptedOutputInts,
-			RelayerFee:       feeStructure.FlatFee.String(),
-			Dimensions:       dimensions,
+	result, err := SolanaTransact(ctx, hinkal, HinkalSolanaTransactParams{
+		ChainID:         chainID,
+		MintAddresses:   mintAddresses,
+		AmountChanges:   amountChanges,
+		RelayAddress:    relay,
+		Recipient:       recipientAddress,
+		Signer:          relay,
+		FunctionName:    "transact",
+		Accounts:        accounts,
+		RelayerFee:      feeStructure.FlatFee,
+		VariableRate:    feeStructure.VariableRate,
+		UseBlockedUtxos: true,
+		OnTxConfirm: func(notes SolanaTransactNotes) error {
+			markNullifiersSpent(hinkal, chainID, [][]string{notes.InputNullifiers})
+			return nil
 		},
-		Accounts:                 accounts,
-		CommitmentValidationData: proof.CommitmentValidationData,
+		Submit: SolanaTransactSubmit{Mode: SolanaSubmitModeRelayer},
 	})
 	if err != nil {
 		return "", nil, err
 	}
-	markInputUtxosSpent(hinkal, chainID, inputUtxosArray)
-	return txHash, amountToRecipient, nil
+	return result.TxHash, amountToRecipient, nil
 }
 
 func withdrawStuckTokenByChainID(
@@ -332,6 +247,171 @@ func withdrawStuckTokenByChainID(
 		return withdrawSingleStuckTokenSolana(ctx, hinkal, chainID, erc20Token, totalAmount, recipientAddress, nullifierCount)
 	}
 	return withdrawSingleStuckToken(ctx, hinkal, chainID, erc20Token, totalAmount, recipientAddress)
+}
+
+func stuckWithdrawViaEnclave(
+	ctx context.Context,
+	hinkal ihinkal.HinkalInternal,
+	chainID int,
+	erc20Token types.ERC20Token,
+	recipientAddress string,
+) ([]string, error) {
+	erc20Address := erc20Token.Erc20TokenAddress
+
+	ethAddress, err := hinkal.GetEthereumAddressByChain(ctx, chainID)
+	if err != nil {
+		return nil, err
+	}
+	feeStructure, err := pretransaction.GetFeeStructure(ctx, chainID, erc20Address, []string{erc20Address}, types.ExternalActionTransact, nil, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	relay, err := relayerAddress(ctx, hinkal, chainID)
+	if err != nil {
+		return nil, err
+	}
+	externalAddress, err := utils.AddressToHexFormat(recipientAddress)
+	if err != nil {
+		return nil, err
+	}
+
+	jobs, err := enclave.PrepareStuckWithdrawEnclaveCall(ctx, hinkal.GetUserKeys(), enclave.PrepareStuckWithdrawParams{
+		ChainID:               chainID,
+		Erc20Address:          erc20Address,
+		ExternalAddress:       externalAddress,
+		Relay:                 relay,
+		FeeStructure:          feeStructure,
+		HashedEthereumAddress: utils.HashEthereumAddress(ethAddress),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	txHashes := make([]string, 0, len(jobs))
+	for _, job := range jobs {
+		signedMessageHash, err := utils.ParseBigInt(job.SignedMessageHash)
+		if err != nil {
+			return nil, err
+		}
+		sig, err := hinkal.GetUserKeys().SignEddsa(signedMessageHash)
+		if err != nil {
+			return nil, err
+		}
+		txHash, err := enclave.FinalizeTxEnclaveCallRelay(ctx, job.JobID, sig, chainID, enclave.FinalizeTxRelayExtra{})
+		if err != nil {
+			if len(txHashes) == 0 {
+				return nil, err
+			}
+			log.Printf("stuck withdrawal partially submitted (%d/%d): %v", len(txHashes), len(jobs), err)
+			return txHashes, nil
+		}
+		txHashes = append(txHashes, txHash)
+	}
+	return txHashes, nil
+}
+
+func stuckBalanceForToken(
+	ctx context.Context,
+	hinkal ihinkal.HinkalInternal,
+	chainID int,
+	erc20Token types.ERC20Token,
+	ethAddress string,
+) *big.Int {
+	balancesByChain, err := hinkal.GetStuckShieldedBalances(ctx, []int{chainID}, hinkal.GetUserKeys(), ethAddress)
+	if err != nil {
+		log.Printf("failed to read stuck balance after an empty stuck withdrawal: %v", err)
+		return new(big.Int)
+	}
+	for _, balance := range balancesByChain[chainID] {
+		if strings.EqualFold(balance.Token.Erc20TokenAddress, erc20Token.Erc20TokenAddress) {
+			return balance.Balance
+		}
+	}
+	return new(big.Int)
+}
+
+// Fees are quoted per nullifier count because the enclave picks the chunking.
+func solanaStuckFeeStructures(
+	ctx context.Context,
+	chainID int,
+	mintAddress, recipientAddress string,
+) (map[string]types.FeeStructure, error) {
+	feeStructures := make(map[string]types.FeeStructure, maxStuckUtxosPerTx)
+	for nullifierCount := 1; nullifierCount <= maxStuckUtxosPerTx; nullifierCount++ {
+		feeStructure, err := pretransaction.GetFeeStructure(ctx, chainID, mintAddress, []string{mintAddress}, types.ExternalActionTransact, nil, nil, &api.SolanaGasEstimateParams{
+			MintTo:         mintAddress,
+			Recipient:      recipientAddress,
+			NullifierCount: nullifierCount,
+		})
+		if err != nil {
+			return nil, err
+		}
+		feeStructures[strconv.Itoa(nullifierCount)] = feeStructure
+	}
+	return feeStructures, nil
+}
+
+func stuckWithdrawSolanaViaEnclave(
+	ctx context.Context,
+	hinkal ihinkal.HinkalInternal,
+	chainID int,
+	erc20Token types.ERC20Token,
+	recipientAddress string,
+) ([]string, error) {
+	mintAddress := erc20Token.Erc20TokenAddress
+
+	ethAddress, err := hinkal.GetEthereumAddressByChain(ctx, chainID)
+	if err != nil {
+		return nil, err
+	}
+	relay, err := relayerAddress(ctx, hinkal, chainID)
+	if err != nil {
+		return nil, err
+	}
+	feeStructures, err := solanaStuckFeeStructures(ctx, chainID, mintAddress, recipientAddress)
+	if err != nil {
+		return nil, err
+	}
+
+	accounts := api.SolanaTransactAccounts{Recipient: recipientAddress}
+	if !strings.EqualFold(mintAddress, constants.SolanaNativeAddress) {
+		accounts.Mint = mintAddress
+	}
+	accountsJSON, err := json.Marshal(accounts)
+	if err != nil {
+		return nil, err
+	}
+
+	jobs, err := enclave.PrepareSolanaStuckWithdrawEnclaveCall(ctx, hinkal.GetUserKeys(), types.PrepareSolanaStuckWithdrawParams{
+		ChainID:               chainID,
+		MintAddress:           mintAddress,
+		Recipient:             recipientAddress,
+		RelayAddress:          relay,
+		Accounts:              accountsJSON,
+		FeeStructures:         feeStructures,
+		HashedEthereumAddress: utils.HashEthereumAddress(ethAddress),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	txHashes := make([]string, 0, len(jobs))
+	for _, job := range jobs {
+		signedMessageHash, err := utils.ParseBigInt(job.SignedMessageHash)
+		if err != nil {
+			return nil, err
+		}
+		sig, err := hinkal.GetUserKeys().SignEddsa(signedMessageHash)
+		if err != nil {
+			return nil, err
+		}
+		txHash, err := enclave.FinalizeSolanaTxEnclaveCallRelay(ctx, job.JobID, sig, chainID, nil)
+		if err != nil {
+			return nil, err
+		}
+		txHashes = append(txHashes, txHash)
+	}
+	return txHashes, nil
 }
 
 func HinkalWithdrawStuckUtxos(
@@ -356,6 +436,26 @@ func HinkalWithdrawStuckUtxos(
 		return nil, err
 	}
 	erc20Token := erc20Tokens[0]
+
+	if hinkal.GenerateProofRemotely() {
+		var txHashes []string
+		if constants.IsSolanaLike(chainID) {
+			txHashes, err = stuckWithdrawSolanaViaEnclave(ctx, hinkal, chainID, erc20Token, recipientAddress)
+		} else {
+			txHashes, err = stuckWithdrawViaEnclave(ctx, hinkal, chainID, erc20Token, recipientAddress)
+		}
+		if err != nil {
+			return nil, err
+		}
+		if len(txHashes) == 0 {
+			if stuckBalanceForToken(ctx, hinkal, chainID, erc20Token, ethAddress).Sign() > 0 {
+				return nil, errInsufficientRecoveryFees
+			}
+			return nil, errNoStuckBalanceToWithdraw
+		}
+		return txHashes, nil
+	}
+
 	results := []string{}
 
 	if err := hinkal.ResetMerkleTreesIfNecessary(ctx, chainID); err != nil {

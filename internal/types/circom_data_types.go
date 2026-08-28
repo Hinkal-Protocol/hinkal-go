@@ -84,6 +84,10 @@ type CircomDataType struct {
 	FeeStructure            FeeStructure             `json:"feeStructure"`
 	OriginalSender          string                   `json:"originalSender"`
 	ExtraData               string                   `json:"extraData"`
+
+	NewRootHash        *big.Int `json:"newRootHash,omitempty"`
+	InsertedLeafIndex  *big.Int `json:"insertedLeafIndex,omitempty"`
+	CreateBlockedUtxos bool     `json:"createBlockedUtxos,omitempty"`
 }
 
 type CircomDataJSONType struct {
@@ -108,6 +112,10 @@ type CircomDataJSONType struct {
 	FeeStructure            FeeStructureJSON             `json:"feeStructure"`
 	OriginalSender          string                       `json:"originalSender"`
 	ExtraData               string                       `json:"extraData"`
+
+	NewRootHash        *string `json:"newRootHash,omitempty"`
+	InsertedLeafIndex  *string `json:"insertedLeafIndex,omitempty"`
+	CreateBlockedUtxos bool    `json:"createBlockedUtxos,omitempty"`
 }
 
 type CommitmentValidationProof struct {

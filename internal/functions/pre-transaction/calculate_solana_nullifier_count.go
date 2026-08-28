@@ -44,7 +44,7 @@ func solanaNullifierCount(
 	mintAddresses []string,
 	amountChanges []*big.Int,
 ) (int, error) {
-	inputUtxosArray, err := balance.AddPaddingToUtxos(ctx, hinkal, chainID, mintAddresses, amountChanges, 6, false, false)
+	inputUtxosArray, err := balance.AddPaddingToUtxos(ctx, hinkal, chainID, mintAddresses, amountChanges, 6, false, false, nil)
 	if err != nil {
 		return 0, err
 	}

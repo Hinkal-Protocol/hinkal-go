@@ -94,21 +94,19 @@ func GenerateProofSignatureRemotely(
 	inputs []*big.Int,
 	dim types.DimDataType,
 	externalActionID *big.Int,
+	skipLock bool,
 ) (api.TronProofSignature, error) {
-	verifierID, err := GetVerifierID(dim, externalActionID)
-	if err != nil {
-		return api.TronProofSignature{}, err
-	}
 	signatureHex, err := api.SignProofEnclaveCall(ctx, api.SignProofRequest{
-		ChainID:         chainID,
-		A:               bigIntsToDecimal(a),
-		B:               [][]string{bigIntsToDecimal(b[0]), bigIntsToDecimal(b[1])},
-		C:               bigIntsToDecimal(c),
-		Inputs:          bigIntsToDecimal(inputs),
-		VerifierID:      verifierID.String(),
-		TokenNumber:     dim.TokenNumber,
-		NullifierAmount: dim.NullifierAmount,
-		OutputAmount:    dim.OutputAmount,
+		ChainID:          chainID,
+		A:                bigIntsToDecimal(a),
+		B:                [][]string{bigIntsToDecimal(b[0]), bigIntsToDecimal(b[1])},
+		C:                bigIntsToDecimal(c),
+		Inputs:           bigIntsToDecimal(inputs),
+		ExternalActionID: externalActionID.String(),
+		TokenNumber:      dim.TokenNumber,
+		NullifierAmount:  dim.NullifierAmount,
+		OutputAmount:     dim.OutputAmount,
+		SkipLock:         skipLock,
 	})
 	if err != nil {
 		return api.TronProofSignature{}, err
@@ -140,7 +138,8 @@ func SwapTronBCoordinate(zk *types.NewZkCallDataType) {
 }
 
 // ReorderZkCallData computes the Tron proof signature and, when modify is set, swaps the G2 b
-// coordinates of zkCallData in place.
+// coordinates of zkCallData in place. skipLock releases the enclave signing lock early, for callers
+// that hold it across several proofs of one batch.
 func ReorderZkCallData(
 	ctx context.Context,
 	chainID int,
@@ -148,6 +147,7 @@ func ReorderZkCallData(
 	dim types.DimDataType,
 	circom types.CircomDataType,
 	modify bool,
+	skipLock bool,
 ) (api.TronProofSignature, error) {
 	a, b, c, publicSignals, err := ParseZkCalldata(*zk)
 	if err != nil {
@@ -157,7 +157,7 @@ func ReorderZkCallData(
 	if externalActionID == nil {
 		externalActionID = big.NewInt(0)
 	}
-	proofSig, err := GenerateProofSignatureRemotely(ctx, chainID, a, b, c, publicSignals, dim, externalActionID)
+	proofSig, err := GenerateProofSignatureRemotely(ctx, chainID, a, b, c, publicSignals, dim, externalActionID, skipLock)
 	if err != nil {
 		return api.TronProofSignature{}, err
 	}

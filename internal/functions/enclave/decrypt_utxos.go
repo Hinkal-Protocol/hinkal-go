@@ -40,12 +40,12 @@ func GetInputUtxosEnclave(ctx context.Context, chainID int, uk *cryptokeys.UserK
 		return nil, nil, "", err
 	}
 
-	keyCiphertext, inputCiphertext, err := MakeHandshakeAndEncrypt(ctx, data)
+	handshake, err := MakeHandshakeAndEncrypt(ctx, data)
 	if err != nil {
 		return nil, nil, "", err
 	}
 
-	resp, err := api.DecryptUtxoEnclaveCall(ctx, chainID, keyCiphertext, inputCiphertext)
+	resp, err := api.DecryptUtxoEnclaveCall(ctx, chainID, handshake.KeyCiphertext, handshake.InputCiphertext)
 	if err != nil {
 		return nil, nil, "", err
 	}

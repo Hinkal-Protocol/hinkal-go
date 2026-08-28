@@ -5,6 +5,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/ethclient"
 
+	"github.com/Hinkal-Protocol/hinkal-go/internal/api"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
 )
 
@@ -20,11 +21,11 @@ func fetchClient(chainID int) (*ethclient.Client, error) {
 	if client, ok := fetchClients[chainID]; ok {
 		return client, nil
 	}
-	rpcURL, err := constants.FetchRPCURL(chainID)
+	rpcURL, err := constants.RPCURL(chainID)
 	if err != nil {
 		return nil, err
 	}
-	client, err := ethclient.Dial(rpcURL)
+	client, err := api.DialEthClientWithFallback(chainID, rpcURL)
 	if err != nil {
 		return nil, err
 	}

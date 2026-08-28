@@ -57,7 +57,10 @@ func SerializeCircomData(c types.CircomDataType) types.CircomDataJSONType {
 			FlatFee:      c.FeeStructure.FlatFee.String(),
 			VariableRate: c.FeeStructure.VariableRate.String(),
 		},
-		OriginalSender: c.OriginalSender,
-		ExtraData:      c.ExtraData,
+		OriginalSender:     c.OriginalSender,
+		ExtraData:          c.ExtraData,
+		NewRootHash:        bigIntPtrString(c.NewRootHash),
+		InsertedLeafIndex:  bigIntPtrString(c.InsertedLeafIndex),
+		CreateBlockedUtxos: c.CreateBlockedUtxos,
 	}
 }

@@ -12,6 +12,7 @@ type MerkleTree interface {
 	Insert(value, index *big.Int)
 	Remove(index *big.Int)
 	GetValue(index *big.Int) (*big.Int, bool)
+	Contains(value *big.Int) bool
 	GetStartIndex() *big.Int
 	GetIndex() *big.Int
 	LastLeaves(limit int) []*big.Int

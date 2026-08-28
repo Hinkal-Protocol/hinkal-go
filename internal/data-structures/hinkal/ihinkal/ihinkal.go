@@ -36,7 +36,7 @@ type IHinkal interface {
 	InitUserKeys(ctx context.Context, mode types.LoginMessageMode) error
 	InitUserKeysWithSignature(signature string)
 	InitUserKeysFromSeedPhrases(seedPhrases []string) error
-	StoreAndGetInitialSignature(ctx context.Context, authSignature string, isSolanaLedger bool, txMessageForSolanaLedger string) (string, error)
+	StoreAndGetInitialSignature(ctx context.Context, authSignature string) (string, error)
 	SignMessage(ctx context.Context, message string) (string, error)
 	SignTypedData(ctx context.Context, typedDataHash []byte) (string, error)
 	Destroy() error
@@ -55,8 +55,10 @@ type IHinkal interface {
 	GetSolanaPublicKey(ctx context.Context) (solana.PublicKey, error)
 	GetRecipientInfo() (string, error)
 	GetShieldedPublicKey() (string, error)
+	GetTotalBalances(ctx context.Context, chainIDs []int, userKeys *cryptokeys.UserKeys, ethAddress string, resetCacheBefore, useBlockedUtxos bool) (map[int][]types.TokenBalance, error)
 	GetTotalBalance(ctx context.Context, chainID int, userKeys *cryptokeys.UserKeys, ethAddress string, resetCacheBefore, useBlockedUtxos bool) ([]types.TokenBalance, error)
-	GetStuckShieldedBalances(ctx context.Context, chainID int, userKeys *cryptokeys.UserKeys, ethAddress string) ([]types.TokenBalance, error)
+	GetStuckShieldedBalances(ctx context.Context, chainIDs []int, userKeys *cryptokeys.UserKeys, ethAddress string) (map[int][]types.TokenBalance, error)
+	GetStuckShieldedBalance(ctx context.Context, chainID int, userKeys *cryptokeys.UserKeys, ethAddress string) ([]types.TokenBalance, error)
 
 	Deposit(ctx context.Context, chainID int, erc20Addresses []string, amountChanges []*big.Int, preEstimateGas, returnTxData bool) (types.TransactionRequest, string, error)
 	DepositForOther(ctx context.Context, chainID int, erc20Addresses []string, amountChanges []*big.Int, recipientInfo string, preEstimateGas, returnTxData bool) (types.TransactionRequest, string, error)
@@ -106,7 +108,6 @@ type HinkalInternal interface {
 	SignHinkalMessage(ctx context.Context, mode types.LoginMessageMode) (string, error)
 
 	GetHinkalTreeRootHash(ctx context.Context, chainID int) (*big.Int, error)
-	GetBalances(ctx context.Context, chainID int, passedShieldedPublicKey, ethAddress string, resetCacheBefore, useBlockedUtxos bool) (map[string]types.TokenBalance, error)
 	GetRandomRelay(ctx context.Context, chainID int, markAsPending bool) (string, error)
 	GetGasPrice(ctx context.Context, chainID int) (*big.Int, error)
 	SendTransaction(ctx context.Context, chainID int, req types.TransactionRequest) (types.TransactionResponse, error)

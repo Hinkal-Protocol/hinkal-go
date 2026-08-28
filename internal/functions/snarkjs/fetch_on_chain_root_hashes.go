@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 
+	"github.com/Hinkal-Protocol/hinkal-go/internal/api"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/contractabi"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/solana"
@@ -26,7 +27,7 @@ func FetchOnChainRootHashAndIndex(ctx context.Context, chainID int) (*big.Int, *
 	if err != nil {
 		return nil, nil, err
 	}
-	rpcURL, err := constants.FetchRPCURL(chainID)
+	rpcURL, err := constants.RPCURL(chainID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -36,7 +37,7 @@ func FetchOnChainRootHashAndIndex(ctx context.Context, chainID int) (*big.Int, *
 		if err != nil {
 			return nil, nil, err
 		}
-		client := solana.NewClient(rpcURL)
+		client := api.NewSolanaClientWithFallback(rpcURL)
 		rootHash, err := solana.FetchMerkleTreeRootHash(ctx, client, hinkalAddress, originalDeployer)
 		if err != nil {
 			return nil, nil, err
@@ -52,7 +53,7 @@ func FetchOnChainRootHashAndIndex(ctx context.Context, chainID int) (*big.Int, *
 		return rootHash, big.NewInt(0), nil
 	}
 
-	client, err := ethclient.DialContext(ctx, rpcURL)
+	client, err := api.DialEthClientWithFallback(chainID, rpcURL)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -10,8 +10,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethclient"
 
+	"github.com/Hinkal-Protocol/hinkal-go/internal/api"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
 )
 
@@ -67,11 +67,12 @@ func (s *PrivateKeyEVMSigner) SignTransaction(_ context.Context, tx *ethtypes.Tr
 }
 
 func (s *PrivateKeyEVMSigner) BroadcastTransaction(ctx context.Context, tx *ethtypes.Transaction) (string, error) {
-	rpcURL, err := constants.FetchRPCURL(int(tx.ChainId().Int64()))
+	chainID := int(tx.ChainId().Int64())
+	rpcURL, err := constants.RPCURL(chainID)
 	if err != nil {
 		return "", err
 	}
-	client, err := ethclient.Dial(rpcURL)
+	client, err := api.DialEthClientWithFallback(chainID, rpcURL)
 	if err != nil {
 		return "", fmt.Errorf("dial rpc: %w", err)
 	}

@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { ethers } = require('ethers');
 
-const TS_DEPLOY_DATA = path.resolve(__dirname, '../../../shared/common/src/constants/deploy-data');
+const TS_DEPLOY_DATA = path.resolve(__dirname, '../../../../shared/common/src/constants/deploy-data');
 const GO_DEPLOY_DATA = path.resolve(__dirname, '../deploy-data');
 
 const toJsonAbi = (humanReadableAbi) => JSON.parse(new ethers.Interface(humanReadableAbi).formatJson());
@@ -20,10 +20,13 @@ for (const file of fs.readdirSync(TS_DEPLOY_DATA)) {
 // hinkalHelperABI is intentionally omitted; the Go SDK does not use it.
 for (const family of ['evm', 'tron']) {
   const shared = readJson(path.join(TS_DEPLOY_DATA, `shared-deploy-data-${family}.json`));
-  writeJson(path.join(GO_DEPLOY_DATA, `shared-deploy-data-${family}.json`), {
-    hinkalABI: toJsonAbi(shared.hinkalABI),
-    hinkalWrapperABI: toJsonAbi(shared.hinkalWrapperABI),
-  });
+  const converted = {};
+  // Not every family ships every contract (e.g. Tron has no HinkalWrapper), so only
+  // convert the ABIs that are actually present.
+  for (const key of ['hinkalABI', 'hinkalWrapperABI']) {
+    if (shared[key]) converted[key] = toJsonAbi(shared[key]);
+  }
+  writeJson(path.join(GO_DEPLOY_DATA, `shared-deploy-data-${family}.json`), converted);
 }
 
 console.log('Regenerated Go deploy data from', path.relative(process.cwd(), TS_DEPLOY_DATA));

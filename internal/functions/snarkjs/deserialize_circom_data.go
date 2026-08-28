@@ -37,7 +37,26 @@ func DeserializeCircomData(d types.CircomDataJSONType) (types.CircomDataType, er
 		return types.CircomDataType{}, err
 	}
 
+	var newRootHash, insertedLeafIndex *big.Int
+	if d.NewRootHash != nil {
+		parsed, err := utils.ParseBigInt(*d.NewRootHash)
+		if err != nil {
+			return types.CircomDataType{}, err
+		}
+		newRootHash = parsed
+	}
+	if d.InsertedLeafIndex != nil {
+		parsed, err := utils.ParseBigInt(*d.InsertedLeafIndex)
+		if err != nil {
+			return types.CircomDataType{}, err
+		}
+		insertedLeafIndex = parsed
+	}
+
 	result := types.CircomDataType{
+		NewRootHash:             newRootHash,
+		InsertedLeafIndex:       insertedLeafIndex,
+		CreateBlockedUtxos:      d.CreateBlockedUtxos,
 		Erc20TokenAddresses:     d.Erc20TokenAddresses,
 		AmountChanges:           amountChanges,
 		InputNullifiers:         d.InputNullifiers,

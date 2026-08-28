@@ -6,67 +6,18 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common"
-
 	"github.com/Hinkal-Protocol/hinkal-go/internal/api"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
-	cryptokeys "github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/crypto-keys"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/hinkal/ihinkal"
-	"github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/utxo"
-	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/balance"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/fees"
 	pretransaction "github.com/Hinkal-Protocol/hinkal-go/internal/functions/pre-transaction"
-	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/snarkjs"
-	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/utils"
-	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/web3"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/types"
 )
 
 var (
-	errSolanaWithdrawOneMint       = errors.New("Solana Withdraw: Only one mint address is supported")
-	errSolanaWithdrawNoToken       = errors.New("Solana Withdraw: No Token Found")
-	errSolanaWithdrawMissingOutput = errors.New("transactions: Solana withdraw missing output UTXO")
+	errSolanaWithdrawOneMint = errors.New("Solana Withdraw: Only one mint address is supported")
+	errSolanaWithdrawNoToken = errors.New("Solana Withdraw: No Token Found")
 )
-
-func getSolanaWithdrawInputAndOutputUtxos(
-	ctx context.Context,
-	hinkal ihinkal.HinkalInternal,
-	chainID int,
-	mintAddresses []string,
-	amountChanges []*big.Int,
-) ([]*utxo.Utxo, []*utxo.Utxo, error) {
-	inputUtxosArray, err := balance.AddPaddingToUtxos(ctx, hinkal, chainID, mintAddresses, amountChanges, 6, false, false)
-	if err != nil {
-		return nil, nil, err
-	}
-	userKeys := hinkal.GetUserKeys()
-	timeStamp := new(big.Int).SetInt64(utils.GetCurrentTimeInSeconds()).String()
-	outputUtxos, err := pretransaction.OutputUtxoProcessing(userKeys, inputUtxosArray[0], amountChanges[0], timeStamp, true, "", nil)
-	if err != nil {
-		return nil, nil, err
-	}
-	return inputUtxosArray[0], outputUtxos, nil
-}
-
-func solanaEncryptedOutputBytes(outputUtxos []*utxo.Utxo) ([][]byte, [][]int, error) {
-	encryptedOutputs, err := snarkjs.CalcEncryptedOutputs([][]*utxo.Utxo{outputUtxos})
-	if err != nil {
-		return nil, nil, err
-	}
-	if len(encryptedOutputs) == 0 || len(encryptedOutputs[0]) == 0 {
-		return nil, nil, errSolanaWithdrawMissingOutput
-	}
-	encryptedOutputBytes := common.FromHex(encryptedOutputs[0][0])
-	bytes := [][]byte{encryptedOutputBytes}
-	ints := make([][]int, len(bytes))
-	for i, row := range bytes {
-		ints[i] = make([]int, len(row))
-		for j, b := range row {
-			ints[i][j] = int(b)
-		}
-	}
-	return bytes, ints, nil
-}
 
 func resolveSolanaWithdrawFeeStructure(
 	ctx context.Context,
@@ -120,6 +71,9 @@ func HinkalSolanaWithdraw(
 	amountChanges := copyBigInts(amountChangesBase)
 	mintAddresses := tokenAddresses(erc20Tokens)
 	token := erc20Tokens[0]
+	if err := ensureSolanaDeployData(chainID); err != nil {
+		return "", err
+	}
 	if feeToken == "" {
 		feeToken = mintAddresses[0]
 	}
@@ -138,58 +92,6 @@ func HinkalSolanaWithdraw(
 	if err != nil {
 		return "", err
 	}
-	inputUtxos, outputUtxos, err := getSolanaWithdrawInputAndOutputUtxos(ctx, hinkal, chainID, mintAddresses, amountChanges)
-	if err != nil {
-		return "", err
-	}
-
-	shieldedPrivateKey, err := hinkal.GetUserKeys().GetShieldedPrivateKey()
-	if err != nil {
-		return "", err
-	}
-	randSeed, err := utils.RandomBigInt(31)
-	if err != nil {
-		return "", err
-	}
-	extraRandomization, err := cryptokeys.FindCorrectRandomization(randSeed, shieldedPrivateKey)
-	if err != nil {
-		return "", err
-	}
-	encryptedOutputBytes, encryptedOutputInts, err := solanaEncryptedOutputBytes(outputUtxos)
-	if err != nil {
-		return "", err
-	}
-	inputUtxosArray := [][]*utxo.Utxo{inputUtxos}
-	outputUtxosArray := [][]*utxo.Utxo{outputUtxos}
-	if err := pretransaction.EnsureAmountChanges(inputUtxosArray, outputUtxosArray, amountChanges); err != nil {
-		return "", err
-	}
-
-	dimensions := types.DimDataType{
-		TokenNumber:     len(mintAddresses),
-		NullifierAmount: len(inputUtxos),
-		OutputAmount:    len(outputUtxos),
-	}
-	proof, err := snarkjs.ConstructSolanaZkProof(ctx, snarkjs.ConstructSolanaZkProofParams{
-		GenerateProofRemotely: hinkal.GenerateProofRemotely(),
-		MerkleTree:            hinkal.MerkleTree(chainID),
-		UserKeys:              hinkal.GetUserKeys(),
-		MintAddresses:         mintAddresses,
-		InputUtxos:            inputUtxosArray,
-		OutputUtxos:           outputUtxosArray,
-		ExtraRandomization:    extraRandomization,
-		RelayerFee:            feeStructure.FlatFee,
-		VariableRate:          feeStructure.VariableRate,
-		RecipientAddress:      recipientAddress,
-		SignerAddress:         relay,
-		Dimensions:            dimensions,
-		EncryptedOutputs:      encryptedOutputBytes,
-		ChainID:               chainID,
-	})
-	if err != nil {
-		return "", err
-	}
-
 	accounts := api.SolanaTransactAccounts{Recipient: recipientAddress}
 	if !strings.EqualFold(mintAddresses[0], constants.SolanaNativeAddress) {
 		accounts.Mint = mintAddresses[0]
@@ -201,21 +103,21 @@ func HinkalSolanaWithdraw(
 	}
 	adminData := pretransaction.ConstructAdminData(types.AdminUnshield, chainID, mintAddresses, amountChanges, ethereumAddress, nil)
 
-	return web3.SolanaTransactCallRelayer(ctx, api.SolanaTransactionBody{
-		ChainID:      chainID,
-		RelayAddress: relay,
-		FunctionName: "transact",
-		Args: api.SolanaArgs{
-			ProofAArr:        proof.ProofAArr,
-			ProofBArr:        proof.ProofBArr,
-			ProofCArr:        proof.ProofCArr,
-			PublicInputsArr:  proof.PublicInputsArr,
-			EncryptedOutputs: encryptedOutputInts,
-			RelayerFee:       feeStructure.FlatFee.String(),
-			Dimensions:       dimensions,
-		},
-		Accounts:                 accounts,
-		CommitmentValidationData: proof.CommitmentValidationData,
-		AdminData:                adminData,
+	result, err := SolanaTransact(ctx, hinkal, HinkalSolanaTransactParams{
+		ChainID:       chainID,
+		MintAddresses: mintAddresses,
+		AmountChanges: amountChanges,
+		RelayAddress:  relay,
+		Recipient:     recipientAddress,
+		Signer:        relay,
+		FunctionName:  "transact",
+		Accounts:      accounts,
+		RelayerFee:    feeStructure.FlatFee,
+		VariableRate:  feeStructure.VariableRate,
+		Submit:        SolanaTransactSubmit{Mode: SolanaSubmitModeRelayer, AdminData: adminData},
 	})
+	if err != nil {
+		return "", err
+	}
+	return result.TxHash, nil
 }

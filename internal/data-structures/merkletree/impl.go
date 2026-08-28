@@ -106,6 +106,11 @@ func (m *merkleTreeImpl) GetValue(index *big.Int) (*big.Int, bool) {
 	return v, ok
 }
 
+func (m *merkleTreeImpl) Contains(value *big.Int) bool {
+	_, ok := m.reverseTree[value.String()]
+	return ok
+}
+
 func (m *merkleTreeImpl) LastLeaves(limit int) []*big.Int {
 	if m.count.Sign() == 0 {
 		return nil

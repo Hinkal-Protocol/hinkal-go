@@ -35,6 +35,8 @@ type ConstructZkProofParams struct {
 	OriginalSender         string
 	SubAccountPrivateKey   string
 	ExtraData              string
+	IsSpeculativeTree      bool
+	SlippageValues         []*big.Int
 }
 
 type ConstructZkProofResult struct {
@@ -111,7 +113,7 @@ func ConstructZkProof(ctx context.Context, params ConstructZkProofParams) (Const
 	}
 	onChainEncryptedOutput := "0x" + hex.EncodeToString(onChainEncryptedOutputBytes)
 
-	data, err := GetDataFromWorkers(ctx, chainID, params.MerkleTree, inputUtxos)
+	data, err := GetDataFromWorkers(ctx, chainID, params.MerkleTree, inputUtxos, params.IsSpeculativeTree)
 	if err != nil {
 		return ConstructZkProofResult{}, err
 	}
@@ -202,6 +204,9 @@ func ConstructZkProof(ctx context.Context, params ConstructZkProofParams) (Const
 	publicSignalCount := CalcPublicSignalCount(verifierName, erc20TokenAddresses, amountChanges, data.InNullifiers, outCommitments)
 	amountChangesBased := CalcAmountChanges(inputUtxos, outputUtxos, true)
 	slippageValues := GetSlippageValues(amountChangesBased)
+	if params.SlippageValues != nil {
+		slippageValues = params.SlippageValues
+	}
 
 	metadataOps := params.ExternalActionMetadata
 	var externalActionMetadata2 string

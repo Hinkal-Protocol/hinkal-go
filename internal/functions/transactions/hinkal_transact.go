@@ -3,8 +3,8 @@ package transactions
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
-	"strconv"
 
 	"github.com/Hinkal-Protocol/hinkal-go/internal/api"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
@@ -27,6 +27,7 @@ const (
 var (
 	errTransactUserKeysNeedInputUtxos = errors.New("transactions: HinkalTransact: UserKeys requires explicit InputUtxos")
 	errTransactEmptyInputUtxos        = errors.New("transactions: HinkalTransact: InputUtxos must contain at least one note per token")
+	errTransactSelfOutputShape        = errors.New("transactions: selfOutputAmounts only supports a single token with a single self-output")
 )
 
 func padInputUtxos(userKeys *cryptokeys.UserKeys, inputUtxos [][]*utxo.Utxo) ([][]*utxo.Utxo, error) {
@@ -81,6 +82,48 @@ func padInputUtxos(userKeys *cryptokeys.UserKeys, inputUtxos [][]*utxo.Utxo) ([]
 	return padded, nil
 }
 
+func splitSelfOutput(userKeys *cryptokeys.UserKeys, outputUtxosArray [][]*utxo.Utxo, selfOutputAmounts []*big.Int) ([][]*utxo.Utxo, error) {
+	if len(outputUtxosArray) != 1 || len(outputUtxosArray[0]) != 1 {
+		return nil, errTransactSelfOutputShape
+	}
+
+	selfOutput := outputUtxosArray[0][0]
+	total := new(big.Int)
+	for _, amount := range selfOutputAmounts {
+		total.Add(total, amount)
+	}
+	if total.Cmp(selfOutput.Amount) != 0 {
+		return nil, fmt.Errorf("transactions: selfOutputAmounts sum to %s, expected %s", total, selfOutput.Amount)
+	}
+
+	shieldedPrivateKey, err := userKeys.GetShieldedPrivateKey()
+	if err != nil {
+		return nil, err
+	}
+	spendingKeyPair, err := userKeys.GetSpendingKeyPair()
+	if err != nil {
+		return nil, err
+	}
+	spendingPublicKey := []*big.Int{spendingKeyPair.PubSpendingBJJPoint[0], spendingKeyPair.PubSpendingBJJPoint[1]}
+
+	notes := make([]*utxo.Utxo, len(selfOutputAmounts))
+	for i, amount := range selfOutputAmounts {
+		note, err := utxo.NewUtxo(types.UtxoParams{
+			Amount:            amount,
+			Erc20TokenAddress: selfOutput.Erc20TokenAddress,
+			MintAddress:       selfOutput.MintAddress,
+			NullifyingKey:     shieldedPrivateKey,
+			TimeStamp:         selfOutput.TimeStamp,
+			SpendingPublicKey: spendingPublicKey,
+		})
+		if err != nil {
+			return nil, err
+		}
+		notes[i] = note
+	}
+	return [][]*utxo.Utxo{notes}, nil
+}
+
 func buildProofLocally(
 	ctx context.Context,
 	hinkal ihinkal.HinkalInternal,
@@ -93,24 +136,33 @@ func buildProofLocally(
 		inputUtxosArray, err = padInputUtxos(userKeys, params.InputUtxos)
 	} else {
 		inputUtxosArray, err = balance.AddPaddingToUtxos(
-			ctx, hinkal, params.ChainID, params.Erc20Addresses, params.AmountChanges, 0, params.ForceEmptyUtxos, params.UseBlockedUtxos,
+			ctx, hinkal, params.ChainID, params.Erc20Addresses, params.AmountChanges, 0, params.ForceEmptyUtxos, params.UseBlockedUtxos, params.OnChainCreation,
 		)
 	}
 	if err != nil {
 		return TransactProof{}, err
 	}
 
-	timeStamp := strconv.FormatInt(utils.GetCurrentTimeInSeconds(), 10)
-	outputUtxosArray := make([][]*utxo.Utxo, len(params.Erc20Addresses))
-	for i := range params.Erc20Addresses {
-		recipientAmount := recipientAmountAt(params, i)
-		outputUtxos, err := pretransaction.OutputUtxoProcessing(
-			userKeys, inputUtxosArray[i], params.AmountChanges[i], timeStamp, true, params.RecipientAddress, recipientAmount,
-		)
+	outputUtxosArray, err := pretransaction.BuildOutputUtxos(
+		userKeys, inputUtxosArray, params.AmountChanges, params.RecipientAddress, params.RecipientAmounts,
+	)
+	if err != nil {
+		return TransactProof{}, err
+	}
+	if params.SelfOutputAmounts != nil {
+		outputUtxosArray, err = splitSelfOutput(userKeys, outputUtxosArray, params.SelfOutputAmounts)
 		if err != nil {
 			return TransactProof{}, err
 		}
-		outputUtxosArray[i] = outputUtxos
+	}
+
+	liveMerkleTree := hinkal.MerkleTree(params.ChainID)
+	merkleTree := liveMerkleTree
+	if params.Speculative != nil {
+		merkleTree, err = pretransaction.SpeculativeMerkleTree(liveMerkleTree, inputUtxosArray, params.Speculative.PendingLeaves)
+		if err != nil {
+			return TransactProof{}, err
+		}
 	}
 
 	externalActionMetadata := params.EmporiumOps
@@ -119,7 +171,8 @@ func buildProofLocally(
 	}
 
 	proof, err := snarkjs.ConstructZkProof(ctx, snarkjs.ConstructZkProofParams{
-		MerkleTree:             hinkal.MerkleTree(params.ChainID),
+		SlippageValues:         params.SlippageValues,
+		MerkleTree:             merkleTree,
 		InputUtxos:             inputUtxosArray,
 		OutputUtxos:            outputUtxosArray,
 		UserKeys:               userKeys,
@@ -133,6 +186,7 @@ func buildProofLocally(
 		OnChainCreation:        params.OnChainCreation,
 		OriginalSender:         params.OriginalSender,
 		SubAccountPrivateKey:   params.SubAccountPrivateKey,
+		IsSpeculativeTree:      merkleTree != liveMerkleTree,
 	})
 	if err != nil {
 		return TransactProof{}, err
@@ -146,22 +200,48 @@ func buildProofLocally(
 	}, nil
 }
 
-func prepareEnclaveJob(
-	ctx context.Context,
-	params HinkalTransactParams,
-	userKeys *cryptokeys.UserKeys,
-) (string, types.EddsaSignature, error) {
+func collectInputCommitments(inputUtxos [][]*utxo.Utxo) ([]string, error) {
 	var inputCommitments []string
-	for _, notes := range params.InputUtxos {
+	for _, notes := range inputUtxos {
 		for _, note := range notes {
 			if note.Amount == nil || note.Amount.Sign() <= 0 {
 				continue
 			}
 			commitment, err := note.GetCommitment()
 			if err != nil {
-				return "", types.EddsaSignature{}, err
+				return nil, err
 			}
 			inputCommitments = append(inputCommitments, commitment)
+		}
+	}
+	return inputCommitments, nil
+}
+
+func recipientAmountsMatrix(amounts []*big.Int) [][]*big.Int {
+	if len(amounts) == 0 {
+		return nil
+	}
+	return [][]*big.Int{amounts}
+}
+
+func recipientAddresses(recipient string) []string {
+	if recipient == "" {
+		return nil
+	}
+	return []string{recipient}
+}
+
+func prepareEnclaveJob(
+	ctx context.Context,
+	params HinkalTransactParams,
+	userKeys *cryptokeys.UserKeys,
+) (string, types.EddsaSignature, error) {
+	var inputCommitments []string
+	if params.Speculative == nil {
+		var err error
+		inputCommitments, err = collectInputCommitments(params.InputUtxos)
+		if err != nil {
+			return "", types.EddsaSignature{}, err
 		}
 	}
 
@@ -181,13 +261,17 @@ func prepareEnclaveJob(
 		ExternalActionID:       params.ExternalActionID,
 		ExternalActionMetadata: externalActionMetadata,
 		OnChainCreation:        params.OnChainCreation,
-		RecipientAddress:       params.RecipientAddress,
-		RecipientAmounts:       params.RecipientAmounts,
+		RecipientAddress:       recipientAddresses(params.RecipientAddress),
+		RecipientAmounts:       recipientAmountsMatrix(params.RecipientAmounts),
+		SelfOutputAmounts:      params.SelfOutputAmounts,
 		InputCommitments:       inputCommitments,
 		UseBlockedUtxos:        params.UseBlockedUtxos,
+		CreateBlockedUtxos:     params.CreateBlockedUtxos,
 		ForceEmptyUtxos:        params.ForceEmptyUtxos,
 		SkipLock:               params.SkipLock,
 		MessageSeed:            params.MessageSeed,
+		Speculative:            params.Speculative,
+		SlippageValues:         params.SlippageValues,
 	})
 	if err != nil {
 		return "", types.EddsaSignature{}, err
@@ -209,16 +293,6 @@ func feeStructureOrZero(fee *types.FeeStructure) types.FeeStructure {
 		return types.ZeroFeeStructure()
 	}
 	return *fee
-}
-
-func recipientAmountAt(params HinkalTransactParams, index int) *big.Int {
-	if params.RecipientAddress == "" {
-		return nil
-	}
-	if index < len(params.RecipientAmounts) && params.RecipientAmounts[index] != nil {
-		return params.RecipientAmounts[index]
-	}
-	return big.NewInt(0)
 }
 
 func submitAndConfirm(

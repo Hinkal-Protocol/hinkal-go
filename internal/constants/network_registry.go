@@ -45,25 +45,27 @@ var sharedDeployFileByChain = map[int]string{
 }
 
 type ContractData struct {
-	HinkalAddress                     string
-	HinkalHelperAddress               string
-	HinkalWrapperAddress              string
-	EmporiumAddress                   string
-	HinkalWalletAddress               string
-	LifiExternalActionInstanceAddress string
-	OriginalDeployer                  string
+	HinkalAddress                            string
+	HinkalHelperAddress                      string
+	HinkalWrapperAddress                     string
+	DepositOnChainUtxosExternalActionAddress string
+	EmporiumAddress                          string
+	HinkalWalletAddress                      string
+	LifiExternalActionInstanceAddress        string
+	OriginalDeployer                         string
 }
 
 type deployDataFile struct {
-	HinkalAddress                     string          `json:"hinkalAddress"`
-	HinkalHelperAddress               string          `json:"hinkalHelperAddress"`
-	HinkalWrapperAddress              string          `json:"hinkalWrapperAddress"`
-	EmporiumAddress                   string          `json:"emporiumAddress"`
-	HinkalWalletAddress               string          `json:"hinkalWalletAddress"`
-	LifiExternalActionInstanceAddress string          `json:"lifiExternalActionInstanceAddress"`
-	OriginalDeployer                  string          `json:"originalDeployer"`
-	HinkalABI                         json.RawMessage `json:"hinkalABI"`
-	HinkalWrapperABI                  json.RawMessage `json:"hinkalWrapperABI"`
+	HinkalAddress                            string          `json:"hinkalAddress"`
+	HinkalHelperAddress                      string          `json:"hinkalHelperAddress"`
+	HinkalWrapperAddress                     string          `json:"hinkalWrapperAddress"`
+	DepositOnChainUtxosExternalActionAddress string          `json:"depositOnChainUtxosExternalActionAddress"`
+	EmporiumAddress                          string          `json:"emporiumAddress"`
+	HinkalWalletAddress                      string          `json:"hinkalWalletAddress"`
+	LifiExternalActionInstanceAddress        string          `json:"lifiExternalActionInstanceAddress"`
+	OriginalDeployer                         string          `json:"originalDeployer"`
+	HinkalABI                                json.RawMessage `json:"hinkalABI"`
+	HinkalWrapperABI                         json.RawMessage `json:"hinkalWrapperABI"`
 }
 
 var (
@@ -125,14 +127,23 @@ func GetContractData(chainID int) (ContractData, error) {
 		return ContractData{}, err
 	}
 	return ContractData{
-		HinkalAddress:                     d.HinkalAddress,
-		HinkalHelperAddress:               d.HinkalHelperAddress,
-		HinkalWrapperAddress:              d.HinkalWrapperAddress,
-		EmporiumAddress:                   d.EmporiumAddress,
-		HinkalWalletAddress:               d.HinkalWalletAddress,
-		LifiExternalActionInstanceAddress: d.LifiExternalActionInstanceAddress,
-		OriginalDeployer:                  d.OriginalDeployer,
+		HinkalAddress:                            d.HinkalAddress,
+		HinkalHelperAddress:                      d.HinkalHelperAddress,
+		HinkalWrapperAddress:                     d.HinkalWrapperAddress,
+		DepositOnChainUtxosExternalActionAddress: d.DepositOnChainUtxosExternalActionAddress,
+		EmporiumAddress:                          d.EmporiumAddress,
+		HinkalWalletAddress:                      d.HinkalWalletAddress,
+		LifiExternalActionInstanceAddress:        d.LifiExternalActionInstanceAddress,
+		OriginalDeployer:                         d.OriginalDeployer,
 	}, nil
+}
+
+func DepositOnChainUtxosAddress(chainID int) (string, error) {
+	contractData, err := GetContractData(chainID)
+	if err != nil {
+		return "", err
+	}
+	return contractData.DepositOnChainUtxosExternalActionAddress, nil
 }
 
 func HinkalAddress(chainID int) (string, error) {

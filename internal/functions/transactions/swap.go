@@ -7,6 +7,7 @@ import (
 	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/hinkal/ihinkal"
 	pretransaction "github.com/Hinkal-Protocol/hinkal-go/internal/functions/pre-transaction"
+	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/snarkjs"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/types"
 )
 
@@ -27,6 +28,7 @@ func HinkalSwap(
 	data string,
 	feeToken string,
 	feeStructureOverride *types.FeeStructure,
+	slippagePercentage float64,
 ) (string, error) {
 	chainID, err := pretransaction.ValidateAndGetChainID(erc20Tokens)
 	if err != nil {
@@ -64,6 +66,12 @@ func HinkalSwap(
 	}
 	adminData := pretransaction.ConstructAdminData(types.AdminPrivateSwap, chainID, erc20Addresses, deltaAmounts, ethereumAddress, erc20Tokens)
 
+	slippageValues := snarkjs.BuildSwapSlippageValues(deltaAmounts, slippagePercentage)
+
+	if len(deltaAmounts) > 1 {
+		deltaAmounts[1] = big.NewInt(0)
+	}
+
 	result, err := HinkalTransact(ctx, hinkal, HinkalTransactParams{
 		ChainID:                chainID,
 		Erc20Addresses:         erc20Addresses,
@@ -74,6 +82,7 @@ func HinkalSwap(
 		FeeStructure:           &feeStructure,
 		Relay:                  relay,
 		OnChainCreation:        swapOnChainCreation(len(deltaAmounts)),
+		SlippageValues:         slippageValues,
 		Submit:                 NewRelayerSubmit(RelayerSubmit{AdminData: adminData}),
 	})
 	if err != nil {

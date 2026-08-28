@@ -16,7 +16,7 @@ type WalletClient struct {
 }
 
 func NewWalletClient(chainID int) (*WalletClient, error) {
-	fullHost, err := constants.FetchRPCURL(chainID)
+	fullHost, err := constants.RPCURL(chainID)
 	if err != nil {
 		return nil, err
 	}

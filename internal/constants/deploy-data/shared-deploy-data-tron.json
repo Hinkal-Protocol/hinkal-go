@@ -1,1146 +1,74 @@
 {
   "hinkalABI": [
     {
-      "inputs": [
-        {
-          "components": [
-            {
-              "internalType": "uint128",
-              "name": "levels",
-              "type": "uint128"
-            }
-          ],
-          "internalType": "struct IMerkle.MerkleConstructorArgs",
-          "name": "constructorArgs",
-          "type": "tuple"
-        },
-        {
-          "internalType": "address",
-          "name": "_hinkalHelper",
-          "type": "address"
-        },
-        {
-          "internalType": "address",
-          "name": "_hinkalHelperManager",
-          "type": "address"
-        }
-      ],
-      "stateMutability": "nonpayable",
-      "type": "constructor"
-    },
-    {
-      "anonymous": false,
-      "inputs": [],
-      "name": "BlockedUtxosCreated",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [
-        {
-          "indexed": false,
-          "internalType": "address",
-          "name": "approvalTarget",
-          "type": "address"
-        },
-        {
-          "indexed": false,
-          "internalType": "address",
-          "name": "tokenAddress",
-          "type": "address"
-        },
-        {
-          "indexed": false,
-          "internalType": "uint256",
-          "name": "inHinkalAddress",
-          "type": "uint256"
-        }
-      ],
-      "name": "BufferReleased",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [
-        {
-          "indexed": false,
-          "internalType": "address",
-          "name": "externalActionAddress",
-          "type": "address"
-        }
-      ],
-      "name": "ExternalActionRegistered",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [
-        {
-          "indexed": false,
-          "internalType": "address",
-          "name": "approvalTarget",
-          "type": "address"
-        },
-        {
-          "indexed": false,
-          "internalType": "address",
-          "name": "tokenAddress",
-          "type": "address"
-        },
-        {
-          "indexed": false,
-          "internalType": "uint256",
-          "name": "amount",
-          "type": "uint256"
-        },
-        {
-          "indexed": false,
-          "internalType": "uint256",
-          "name": "inHinkalAddress",
-          "type": "uint256"
-        }
-      ],
-      "name": "NewBufferEntry",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [
-        {
-          "indexed": false,
-          "internalType": "uint256",
-          "name": "commitment",
-          "type": "uint256"
-        },
-        {
-          "indexed": false,
-          "internalType": "int256",
-          "name": "index",
-          "type": "int256"
-        },
-        {
-          "indexed": false,
-          "internalType": "bytes",
-          "name": "encryptedOutput",
-          "type": "bytes"
-        }
-      ],
-      "name": "NewCommitment",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [
-        {
-          "indexed": false,
-          "internalType": "address",
-          "name": "sender",
-          "type": "address"
-        },
-        {
-          "indexed": false,
-          "internalType": "uint256",
-          "name": "timestamp",
-          "type": "uint256"
-        },
-        {
-          "indexed": false,
-          "internalType": "address",
-          "name": "erc20TokenAddress",
-          "type": "address"
-        },
-        {
-          "indexed": false,
-          "internalType": "int256",
-          "name": "publicAmount",
-          "type": "int256"
-        }
-      ],
-      "name": "NewTransaction",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [
-        {
-          "indexed": false,
-          "internalType": "uint256",
-          "name": "amount",
-          "type": "uint256"
-        },
-        {
-          "indexed": false,
-          "internalType": "address",
-          "name": "erc20Address",
-          "type": "address"
-        },
-        {
-          "indexed": false,
-          "internalType": "uint256",
-          "name": "randomization",
-          "type": "uint256"
-        },
-        {
-          "indexed": false,
-          "internalType": "uint256",
-          "name": "stealthAddress",
-          "type": "uint256"
-        },
-        {
-          "indexed": false,
-          "internalType": "uint256",
-          "name": "timeStamp",
-          "type": "uint256"
-        }
-      ],
-      "name": "NewUtxo",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [
-        {
-          "indexed": false,
-          "internalType": "uint256",
-          "name": "nullifier",
-          "type": "uint256"
-        }
-      ],
-      "name": "Nullified",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [
-        {
-          "indexed": true,
-          "internalType": "address",
-          "name": "previousOwner",
-          "type": "address"
-        },
-        {
-          "indexed": true,
-          "internalType": "address",
-          "name": "newOwner",
-          "type": "address"
-        }
-      ],
-      "name": "OwnershipTransferStarted",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [
-        {
-          "indexed": true,
-          "internalType": "address",
-          "name": "previousOwner",
-          "type": "address"
-        },
-        {
-          "indexed": true,
-          "internalType": "address",
-          "name": "newOwner",
-          "type": "address"
-        }
-      ],
-      "name": "OwnershipTransferred",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [
-        {
-          "indexed": true,
-          "internalType": "bytes32",
-          "name": "role",
-          "type": "bytes32"
-        },
-        {
-          "indexed": true,
-          "internalType": "bytes32",
-          "name": "previousAdminRole",
-          "type": "bytes32"
-        },
-        {
-          "indexed": true,
-          "internalType": "bytes32",
-          "name": "newAdminRole",
-          "type": "bytes32"
-        }
-      ],
-      "name": "RoleAdminChanged",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [
-        {
-          "indexed": true,
-          "internalType": "bytes32",
-          "name": "role",
-          "type": "bytes32"
-        },
-        {
-          "indexed": true,
-          "internalType": "address",
-          "name": "account",
-          "type": "address"
-        },
-        {
-          "indexed": true,
-          "internalType": "address",
-          "name": "sender",
-          "type": "address"
-        }
-      ],
-      "name": "RoleGranted",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [
-        {
-          "indexed": true,
-          "internalType": "bytes32",
-          "name": "role",
-          "type": "bytes32"
-        },
-        {
-          "indexed": true,
-          "internalType": "address",
-          "name": "account",
-          "type": "address"
-        },
-        {
-          "indexed": true,
-          "internalType": "address",
-          "name": "sender",
-          "type": "address"
-        }
-      ],
-      "name": "RoleRevoked",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [
-        {
-          "indexed": false,
-          "internalType": "address",
-          "name": "verifierAddress",
-          "type": "address"
-        }
-      ],
-      "name": "VerifierRegistered",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [
-        {
-          "indexed": false,
-          "internalType": "address",
-          "name": "verifierAddress",
-          "type": "address"
-        }
-      ],
-      "name": "VerifierRemoved",
-      "type": "event"
-    },
-    {
-      "inputs": [],
-      "name": "DEFAULT_ADMIN_ROLE",
-      "outputs": [
-        {
-          "internalType": "bytes32",
-          "name": "",
-          "type": "bytes32"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "HINKAL_HELPER_MANAGER",
-      "outputs": [
-        {
-          "internalType": "bytes32",
-          "name": "",
-          "type": "bytes32"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "acceptOwnership",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "components": [
-            {
-              "internalType": "uint16",
-              "name": "tokenNumber",
-              "type": "uint16"
-            },
-            {
-              "internalType": "uint16",
-              "name": "nullifierAmount",
-              "type": "uint16"
-            },
-            {
-              "internalType": "uint16",
-              "name": "outputAmount",
-              "type": "uint16"
-            }
-          ],
-          "internalType": "struct Dimensions",
-          "name": "dimensions",
-          "type": "tuple"
-        },
-        {
-          "internalType": "uint256",
-          "name": "externalActionId",
-          "type": "uint256"
-        }
-      ],
-      "name": "buildVerifierId",
-      "outputs": [
-        {
-          "internalType": "uint256",
-          "name": "",
-          "type": "uint256"
-        }
-      ],
-      "stateMutability": "pure",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "uint256",
-          "name": "",
-          "type": "uint256"
-        }
-      ],
-      "name": "externalActionMap",
-      "outputs": [
-        {
-          "internalType": "address",
-          "name": "",
-          "type": "address"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "bytes32",
-          "name": "role",
-          "type": "bytes32"
-        }
-      ],
-      "name": "getRoleAdmin",
-      "outputs": [
-        {
-          "internalType": "bytes32",
-          "name": "",
-          "type": "bytes32"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "getRootHash",
-      "outputs": [
-        {
-          "internalType": "uint256",
-          "name": "",
-          "type": "uint256"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "bytes32",
-          "name": "role",
-          "type": "bytes32"
-        },
-        {
-          "internalType": "address",
-          "name": "account",
-          "type": "address"
-        }
-      ],
-      "name": "grantRole",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "bytes32",
-          "name": "role",
-          "type": "bytes32"
-        },
-        {
-          "internalType": "address",
-          "name": "account",
-          "type": "address"
-        }
-      ],
-      "name": "hasRole",
-      "outputs": [
-        {
-          "internalType": "bool",
-          "name": "",
-          "type": "bool"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "hinkalHelper",
-      "outputs": [
-        {
-          "internalType": "contract IHinkalHelper",
-          "name": "",
-          "type": "address"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "m_index",
-      "outputs": [
-        {
-          "internalType": "uint256",
-          "name": "",
-          "type": "uint256"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "uint256",
-          "name": "",
-          "type": "uint256"
-        }
-      ],
-      "name": "nullifiers",
-      "outputs": [
-        {
-          "internalType": "bool",
-          "name": "",
-          "type": "bool"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "address",
-          "name": "",
-          "type": "address"
-        },
-        {
-          "internalType": "address",
-          "name": "",
-          "type": "address"
-        },
-        {
-          "internalType": "uint256[]",
-          "name": "",
-          "type": "uint256[]"
-        },
-        {
-          "internalType": "uint256[]",
-          "name": "",
-          "type": "uint256[]"
-        },
-        {
-          "internalType": "bytes",
-          "name": "",
-          "type": "bytes"
-        }
-      ],
-      "name": "onERC1155BatchReceived",
-      "outputs": [
-        {
-          "internalType": "bytes4",
-          "name": "",
-          "type": "bytes4"
-        }
-      ],
-      "stateMutability": "pure",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "address",
-          "name": "",
-          "type": "address"
-        },
-        {
-          "internalType": "address",
-          "name": "",
-          "type": "address"
-        },
-        {
-          "internalType": "uint256",
-          "name": "",
-          "type": "uint256"
-        },
-        {
-          "internalType": "uint256",
-          "name": "",
-          "type": "uint256"
-        },
-        {
-          "internalType": "bytes",
-          "name": "",
-          "type": "bytes"
-        }
-      ],
-      "name": "onERC1155Received",
-      "outputs": [
-        {
-          "internalType": "bytes4",
-          "name": "",
-          "type": "bytes4"
-        }
-      ],
-      "stateMutability": "pure",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "address",
-          "name": "",
-          "type": "address"
-        },
-        {
-          "internalType": "address",
-          "name": "",
-          "type": "address"
-        },
-        {
-          "internalType": "uint256",
-          "name": "",
-          "type": "uint256"
-        },
-        {
-          "internalType": "bytes",
-          "name": "",
-          "type": "bytes"
-        }
-      ],
-      "name": "onERC721Received",
-      "outputs": [
-        {
-          "internalType": "bytes4",
-          "name": "",
-          "type": "bytes4"
-        }
-      ],
-      "stateMutability": "pure",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "owner",
-      "outputs": [
-        {
-          "internalType": "address",
-          "name": "",
-          "type": "address"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "pendingOwner",
-      "outputs": [
-        {
-          "internalType": "address",
-          "name": "",
-          "type": "address"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "uint256",
-          "name": "externalActionId",
-          "type": "uint256"
-        },
-        {
-          "internalType": "address",
-          "name": "externalActionAddress",
-          "type": "address"
-        }
-      ],
-      "name": "registerExternalAction",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "address[]",
-          "name": "verifierAddresses",
-          "type": "address[]"
-        }
-      ],
-      "name": "registerVerifiers",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "address",
-          "name": "verifier",
-          "type": "address"
-        }
-      ],
-      "name": "removeVerifier",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "renounceOwnership",
-      "outputs": [],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "bytes32",
-          "name": "role",
-          "type": "bytes32"
-        },
-        {
-          "internalType": "address",
-          "name": "account",
-          "type": "address"
-        }
-      ],
-      "name": "renounceRole",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "bytes32",
-          "name": "role",
-          "type": "bytes32"
-        },
-        {
-          "internalType": "address",
-          "name": "account",
-          "type": "address"
-        }
-      ],
-      "name": "revokeRole",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "uint256",
-          "name": "_root",
-          "type": "uint256"
-        },
-        {
-          "internalType": "uint256",
-          "name": "_rootIndex",
-          "type": "uint256"
-        }
-      ],
-      "name": "rootHashExists",
-      "outputs": [
-        {
-          "internalType": "bool",
-          "name": "",
-          "type": "bool"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "uint256",
-          "name": "",
-          "type": "uint256"
-        }
-      ],
-      "name": "roots",
-      "outputs": [
-        {
-          "internalType": "uint256",
-          "name": "",
-          "type": "uint256"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "address",
-          "name": "_hinkalHelper",
-          "type": "address"
-        }
-      ],
-      "name": "setHinkalHelper",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "bytes4",
-          "name": "interfaceId",
-          "type": "bytes4"
-        }
-      ],
-      "name": "supportsInterface",
-      "outputs": [
-        {
-          "internalType": "bool",
-          "name": "",
-          "type": "bool"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "components": [
-            {
-              "internalType": "uint8",
-              "name": "v",
-              "type": "uint8"
-            },
-            {
-              "internalType": "bytes32",
-              "name": "r",
-              "type": "bytes32"
-            },
-            {
-              "internalType": "bytes32",
-              "name": "s",
-              "type": "bytes32"
-            }
-          ],
-          "internalType": "struct Signature",
-          "name": "proofSignature",
-          "type": "tuple"
-        },
-        {
-          "internalType": "uint256[2]",
-          "name": "a",
-          "type": "uint256[2]"
-        },
-        {
-          "internalType": "uint256[2][2]",
-          "name": "b",
-          "type": "uint256[2][2]"
-        },
-        {
-          "internalType": "uint256[2]",
-          "name": "c",
-          "type": "uint256[2]"
-        },
-        {
-          "components": [
-            {
-              "internalType": "uint16",
-              "name": "tokenNumber",
-              "type": "uint16"
-            },
-            {
-              "internalType": "uint16",
-              "name": "nullifierAmount",
-              "type": "uint16"
-            },
-            {
-              "internalType": "uint16",
-              "name": "outputAmount",
-              "type": "uint16"
-            }
-          ],
-          "internalType": "struct Dimensions",
-          "name": "dimensions",
-          "type": "tuple"
-        },
-        {
-          "components": [
-            {
-              "internalType": "uint256",
-              "name": "rootHashHinkal",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "rootHashHinkalIndex",
-              "type": "uint256"
-            },
-            {
-              "internalType": "address[]",
-              "name": "erc20TokenAddresses",
-              "type": "address[]"
-            },
-            {
-              "internalType": "int256[]",
-              "name": "amountChanges",
-              "type": "int256[]"
-            },
-            {
-              "internalType": "uint256",
-              "name": "newRootHash",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256[][]",
-              "name": "inputNullifiers",
-              "type": "uint256[][]"
-            },
-            {
-              "internalType": "uint256[][]",
-              "name": "outCommitments",
-              "type": "uint256[][]"
-            },
-            {
-              "internalType": "bytes[][]",
-              "name": "encryptedOutputs",
-              "type": "bytes[][]"
-            },
-            {
-              "internalType": "int256[]",
-              "name": "slippageValues",
-              "type": "int256[]"
-            },
-            {
-              "components": [
-                {
-                  "internalType": "address",
-                  "name": "feeToken",
-                  "type": "address"
-                },
-                {
-                  "internalType": "uint256",
-                  "name": "flatFee",
-                  "type": "uint256"
-                },
-                {
-                  "internalType": "uint256",
-                  "name": "variableRate",
-                  "type": "uint256"
-                }
-              ],
-              "internalType": "struct FeeStructure",
-              "name": "feeStructure",
-              "type": "tuple"
-            },
-            {
-              "internalType": "uint256",
-              "name": "timeStamp",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "calldataHash",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "emporiumMessage",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint16",
-              "name": "publicSignalCount",
-              "type": "uint16"
-            },
-            {
-              "internalType": "address",
-              "name": "relay",
-              "type": "address"
-            },
-            {
-              "components": [
-                {
-                  "internalType": "address",
-                  "name": "externalAddress",
-                  "type": "address"
-                },
-                {
-                  "internalType": "uint256",
-                  "name": "externalActionId",
-                  "type": "uint256"
-                },
-                {
-                  "internalType": "bytes",
-                  "name": "externalActionMetadata",
-                  "type": "bytes"
-                }
-              ],
-              "internalType": "struct ExternalActionData",
-              "name": "externalActionData",
-              "type": "tuple"
-            },
-            {
-              "components": [
-                {
-                  "internalType": "address",
-                  "name": "preHookContract",
-                  "type": "address"
-                },
-                {
-                  "internalType": "address",
-                  "name": "postHookContract",
-                  "type": "address"
-                },
-                {
-                  "internalType": "bytes",
-                  "name": "preHookMetadata",
-                  "type": "bytes"
-                },
-                {
-                  "internalType": "bytes",
-                  "name": "postHookMetadata",
-                  "type": "bytes"
-                }
-              ],
-              "internalType": "struct HookData",
-              "name": "hookData",
-              "type": "tuple"
-            },
-            {
-              "internalType": "address",
-              "name": "originalSender",
-              "type": "address"
-            },
-            {
-              "internalType": "bytes",
-              "name": "extraData",
-              "type": "bytes"
-            },
-            {
-              "internalType": "uint256",
-              "name": "insertedLeafIndex",
-              "type": "uint256"
-            },
-            {
-              "internalType": "bool",
-              "name": "createBlockedUtxos",
-              "type": "bool"
-            }
-          ],
-          "internalType": "struct CircomData",
-          "name": "circomData",
-          "type": "tuple"
-        }
-      ],
-      "name": "transact",
-      "outputs": [],
-      "stateMutability": "payable",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "address",
-          "name": "newOwner",
-          "type": "address"
-        }
-      ],
-      "name": "transferOwnership",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "address",
-          "name": "",
-          "type": "address"
-        }
-      ],
-      "name": "verifierMap",
-      "outputs": [
-        {
-          "internalType": "bool",
-          "name": "",
-          "type": "bool"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "stateMutability": "payable",
-      "type": "receive"
-    }
-  ],
-  "hinkalWrapperABI": [
-    {
       "type": "constructor",
       "stateMutability": "undefined",
       "payable": false,
       "inputs": [
         {
+          "type": "tuple",
+          "name": "constructorArgs",
+          "components": [
+            {
+              "type": "uint128",
+              "name": "levels"
+            }
+          ]
+        },
+        {
           "type": "address",
-          "name": "_hinkal"
+          "name": "_hinkalHelper"
+        },
+        {
+          "type": "address",
+          "name": "_hinkalHelperManager"
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "anonymous": false,
+      "name": "BlockedUtxosCreated",
+      "inputs": []
+    },
+    {
+      "type": "event",
+      "anonymous": false,
+      "name": "ExternalActionRegistered",
+      "inputs": [
+        {
+          "type": "address",
+          "name": "externalActionAddress"
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "anonymous": false,
+      "name": "NewCommitment",
+      "inputs": [
+        {
+          "type": "uint256",
+          "name": "commitment"
+        },
+        {
+          "type": "int256",
+          "name": "index"
+        },
+        {
+          "type": "bytes",
+          "name": "encryptedOutput"
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "anonymous": false,
+      "name": "Nullified",
+      "inputs": [
+        {
+          "type": "uint256",
+          "name": "nullifier"
         }
       ]
     },
@@ -1179,6 +107,122 @@
       ]
     },
     {
+      "type": "event",
+      "anonymous": false,
+      "name": "RoleAdminChanged",
+      "inputs": [
+        {
+          "type": "bytes32",
+          "name": "role",
+          "indexed": true
+        },
+        {
+          "type": "bytes32",
+          "name": "previousAdminRole",
+          "indexed": true
+        },
+        {
+          "type": "bytes32",
+          "name": "newAdminRole",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "anonymous": false,
+      "name": "RoleGranted",
+      "inputs": [
+        {
+          "type": "bytes32",
+          "name": "role",
+          "indexed": true
+        },
+        {
+          "type": "address",
+          "name": "account",
+          "indexed": true
+        },
+        {
+          "type": "address",
+          "name": "sender",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "anonymous": false,
+      "name": "RoleRevoked",
+      "inputs": [
+        {
+          "type": "bytes32",
+          "name": "role",
+          "indexed": true
+        },
+        {
+          "type": "address",
+          "name": "account",
+          "indexed": true
+        },
+        {
+          "type": "address",
+          "name": "sender",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "anonymous": false,
+      "name": "VerifierRegistered",
+      "inputs": [
+        {
+          "type": "address",
+          "name": "verifierAddress"
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "anonymous": false,
+      "name": "VerifierRemoved",
+      "inputs": [
+        {
+          "type": "address",
+          "name": "verifierAddress"
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "DEFAULT_ADMIN_ROLE",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [],
+      "outputs": [
+        {
+          "type": "bytes32",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "HINKAL_HELPER_MANAGER",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [],
+      "outputs": [
+        {
+          "type": "bytes32",
+          "name": ""
+        }
+      ]
+    },
+    {
       "type": "function",
       "name": "acceptOwnership",
       "constant": false,
@@ -1188,8 +232,84 @@
     },
     {
       "type": "function",
-      "name": "getEth",
-      "constant": false,
+      "name": "buildVerifierId",
+      "constant": true,
+      "stateMutability": "pure",
+      "payable": false,
+      "inputs": [
+        {
+          "type": "tuple",
+          "name": "dimensions",
+          "components": [
+            {
+              "type": "uint16",
+              "name": "tokenNumber"
+            },
+            {
+              "type": "uint16",
+              "name": "nullifierAmount"
+            },
+            {
+              "type": "uint16",
+              "name": "outputAmount"
+            }
+          ]
+        },
+        {
+          "type": "uint256",
+          "name": "externalActionId"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "uint256",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "externalActionMap",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [
+        {
+          "type": "uint256",
+          "name": ""
+        }
+      ],
+      "outputs": [
+        {
+          "type": "address",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "getRoleAdmin",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [
+        {
+          "type": "bytes32",
+          "name": "role"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "bytes32",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "getRootHash",
+      "constant": true,
+      "stateMutability": "view",
       "payable": false,
       "inputs": [],
       "outputs": [
@@ -1201,7 +321,47 @@
     },
     {
       "type": "function",
-      "name": "getSender",
+      "name": "grantRole",
+      "constant": false,
+      "payable": false,
+      "inputs": [
+        {
+          "type": "bytes32",
+          "name": "role"
+        },
+        {
+          "type": "address",
+          "name": "account"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "type": "function",
+      "name": "hasRole",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [
+        {
+          "type": "bytes32",
+          "name": "role"
+        },
+        {
+          "type": "address",
+          "name": "account"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "bool",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "hinkalHelper",
       "constant": true,
       "stateMutability": "view",
       "payable": false,
@@ -1209,6 +369,39 @@
       "outputs": [
         {
           "type": "address",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "m_index",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [],
+      "outputs": [
+        {
+          "type": "uint256",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "nullifiers",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [
+        {
+          "type": "uint256",
+          "name": ""
+        }
+      ],
+      "outputs": [
+        {
+          "type": "bool",
           "name": ""
         }
       ]
@@ -1243,56 +436,43 @@
     },
     {
       "type": "function",
-      "name": "prooflessDeposit",
+      "name": "registerExternalAction",
       "constant": false,
-      "stateMutability": "payable",
-      "payable": true,
+      "payable": false,
+      "inputs": [
+        {
+          "type": "uint256",
+          "name": "externalActionId"
+        },
+        {
+          "type": "address",
+          "name": "externalActionAddress"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "type": "function",
+      "name": "registerVerifiers",
+      "constant": false,
+      "payable": false,
+      "inputs": [
+        {
+          "type": "address[]",
+          "name": "verifierAddresses"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "type": "function",
+      "name": "removeVerifier",
+      "constant": false,
+      "payable": false,
       "inputs": [
         {
           "type": "address",
-          "name": "feeRecipient"
-        },
-        {
-          "type": "address",
-          "name": "feeToken"
-        },
-        {
-          "type": "uint256",
-          "name": "feeAmount"
-        },
-        {
-          "type": "address[]",
-          "name": "erc20Addresses"
-        },
-        {
-          "type": "uint256[]",
-          "name": "amounts"
-        },
-        {
-          "type": "tuple[]",
-          "name": "stealthAddressStructures",
-          "components": [
-            {
-              "type": "uint256",
-              "name": "H0x"
-            },
-            {
-              "type": "uint256",
-              "name": "H0y"
-            },
-            {
-              "type": "uint256",
-              "name": "H1x"
-            },
-            {
-              "type": "uint256",
-              "name": "H1y"
-            },
-            {
-              "type": "uint256",
-              "name": "stealthAddress"
-            }
-          ]
+          "name": "verifier"
         }
       ],
       "outputs": []
@@ -1308,16 +488,111 @@
     },
     {
       "type": "function",
-      "name": "setHinkalAddress",
+      "name": "renounceRole",
+      "constant": false,
+      "payable": false,
+      "inputs": [
+        {
+          "type": "bytes32",
+          "name": "role"
+        },
+        {
+          "type": "address",
+          "name": "account"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "type": "function",
+      "name": "revokeRole",
+      "constant": false,
+      "payable": false,
+      "inputs": [
+        {
+          "type": "bytes32",
+          "name": "role"
+        },
+        {
+          "type": "address",
+          "name": "account"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "type": "function",
+      "name": "rootHashExists",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [
+        {
+          "type": "uint256",
+          "name": "_root"
+        },
+        {
+          "type": "uint256",
+          "name": "_rootIndex"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "bool",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "roots",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [
+        {
+          "type": "uint256",
+          "name": ""
+        }
+      ],
+      "outputs": [
+        {
+          "type": "uint256",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "setHinkalHelper",
       "constant": false,
       "payable": false,
       "inputs": [
         {
           "type": "address",
-          "name": "_hinkal"
+          "name": "_hinkalHelper"
         }
       ],
       "outputs": []
+    },
+    {
+      "type": "function",
+      "name": "supportsInterface",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [
+        {
+          "type": "bytes4",
+          "name": "interfaceId"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "bool",
+          "name": ""
+        }
+      ]
     },
     {
       "type": "function",
@@ -1383,6 +658,10 @@
               "name": "rootHashHinkal"
             },
             {
+              "type": "uint256",
+              "name": "rootHashHinkalIndex"
+            },
+            {
               "type": "address[]",
               "name": "erc20TokenAddresses"
             },
@@ -1391,12 +670,8 @@
               "name": "amountChanges"
             },
             {
-              "type": "bool[]",
-              "name": "onChainCreation"
-            },
-            {
-              "type": "int256[]",
-              "name": "slippageValues"
+              "type": "uint256",
+              "name": "newRootHash"
             },
             {
               "type": "uint256[][]",
@@ -1409,6 +684,10 @@
             {
               "type": "bytes[][]",
               "name": "encryptedOutputs"
+            },
+            {
+              "type": "int256[]",
+              "name": "slippageValues"
             },
             {
               "type": "tuple",
@@ -1433,34 +712,12 @@
               "name": "timeStamp"
             },
             {
-              "type": "tuple",
-              "name": "stealthAddressStructure",
-              "components": [
-                {
-                  "type": "uint256",
-                  "name": "H0x"
-                },
-                {
-                  "type": "uint256",
-                  "name": "H0y"
-                },
-                {
-                  "type": "uint256",
-                  "name": "H1x"
-                },
-                {
-                  "type": "uint256",
-                  "name": "H1y"
-                },
-                {
-                  "type": "uint256",
-                  "name": "stealthAddress"
-                }
-              ]
+              "type": "uint256",
+              "name": "calldataHash"
             },
             {
               "type": "uint256",
-              "name": "calldataHash"
+              "name": "emporiumMessage"
             },
             {
               "type": "uint16",
@@ -1498,7 +755,7 @@
                 },
                 {
                   "type": "address",
-                  "name": "hookContract"
+                  "name": "postHookContract"
                 },
                 {
                   "type": "bytes",
@@ -1516,7 +773,15 @@
             },
             {
               "type": "bytes",
-              "name": "data1"
+              "name": "extraData"
+            },
+            {
+              "type": "uint256",
+              "name": "insertedLeafIndex"
+            },
+            {
+              "type": "bool",
+              "name": "createBlockedUtxos"
             }
           ]
         }
@@ -1537,8 +802,23 @@
       "outputs": []
     },
     {
-      "type": "receive",
-      "stateMutability": "payable"
+      "type": "function",
+      "name": "verifierMap",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [
+        {
+          "type": "address",
+          "name": ""
+        }
+      ],
+      "outputs": [
+        {
+          "type": "bool",
+          "name": ""
+        }
+      ]
     }
   ]
 }

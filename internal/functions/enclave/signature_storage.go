@@ -10,21 +10,21 @@ func StoreAndGetSignatureFromEnclave(
 	ctx context.Context,
 	ethAddress string,
 	authSignature string,
-	isSolanaLedger bool,
-	txMessageForSolanaLedger string,
 ) (string, error) {
-	keyCiphertext, inputCiphertext, err := MakeHandshakeAndEncrypt(ctx, []byte(authSignature))
+	handshake, err := MakeHandshakeAndEncrypt(ctx, []byte(authSignature))
 	if err != nil {
 		return "", err
 	}
-	resp, err := api.StoreAndGetSignatureEnclaveCall(
+	raw, err := api.StoreAndGetSignatureEnclaveCall(
 		ctx,
 		ethAddress,
-		inputCiphertext,
-		keyCiphertext,
-		isSolanaLedger,
-		txMessageForSolanaLedger,
+		handshake.InputCiphertext,
+		handshake.KeyCiphertext,
 	)
+	if err != nil {
+		return "", err
+	}
+	resp, err := OpenSealedResponse[api.StoreAndGetSignatureResponse](raw, handshake.Key)
 	if err != nil {
 		return "", err
 	}

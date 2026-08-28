@@ -3,6 +3,7 @@ package enclave
 import (
 	"context"
 	"fmt"
+	"log"
 	"math/big"
 	"strings"
 
@@ -16,11 +17,11 @@ import (
 
 func GetRemoteManagedTokenBalances(
 	ctx context.Context,
-	chainID int,
+	chainIDs []int,
 	uk *cryptokeys.UserKeys,
 	useBlockedUtxos bool,
 	hashedEthereumAddress string,
-) (map[string]*big.Int, error) {
+) (map[int]map[string]*big.Int, error) {
 	shieldedPrivateKey, err := uk.GetShieldedPrivateKey()
 	if err != nil {
 		return nil, err
@@ -32,29 +33,45 @@ func GetRemoteManagedTokenBalances(
 	data := make([]byte, 32)
 	shieldedBig.FillBytes(data)
 
-	keyCiphertext, inputCiphertext, err := MakeHandshakeAndEncrypt(ctx, data)
+	handshake, err := MakeHandshakeAndEncrypt(ctx, data)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := api.GetBalancesEnclaveCall(ctx, chainID, keyCiphertext, inputCiphertext, useBlockedUtxos, hashedEthereumAddress)
+	raw, err := api.GetBalancesEnclaveCall(ctx, chainIDs, handshake.KeyCiphertext, handshake.InputCiphertext, useBlockedUtxos, hashedEthereumAddress)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := OpenSealedResponse[api.GetBalancesEnclaveResponse](raw, handshake.Key)
 	if err != nil {
 		return nil, err
 	}
 
-	balances := make(map[string]*big.Int, len(resp.PreConfirmedBalances))
-	for _, entry := range resp.PreConfirmedBalances {
-		tokenKey, err := normalizeEnclaveBalanceTokenAddress(chainID, entry.Erc20TokenAddress)
-		if err != nil {
-			return nil, err
+	return balancesFromResults(resp.Results)
+}
+
+func balancesFromResults(results []api.ChainBalancesEntry) (map[int]map[string]*big.Int, error) {
+	balancesByChain := make(map[int]map[string]*big.Int, len(results))
+	for _, result := range results {
+		if result.Error != "" {
+			log.Printf("enclave balance fetch failed for chainId %d: %s", result.ChainID, result.Error)
+			continue
 		}
-		amount, err := utils.ParseBigInt(entry.Amount)
-		if err != nil {
-			return nil, err
+		balances := make(map[string]*big.Int, len(result.PreConfirmedBalances))
+		for _, entry := range result.PreConfirmedBalances {
+			tokenKey, err := normalizeEnclaveBalanceTokenAddress(result.ChainID, entry.Erc20TokenAddress)
+			if err != nil {
+				return nil, err
+			}
+			amount, err := utils.ParseBigInt(entry.Amount)
+			if err != nil {
+				return nil, err
+			}
+			balances[tokenKey] = amount
 		}
-		balances[tokenKey] = amount
+		balancesByChain[result.ChainID] = balances
 	}
-	return balances, nil
+	return balancesByChain, nil
 }
 
 func normalizeEnclaveBalanceTokenAddress(chainID int, enclaveTokenAddress string) (string, error) {

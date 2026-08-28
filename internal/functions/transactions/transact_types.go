@@ -68,11 +68,15 @@ type HinkalTransactParams struct {
 	OnChainCreation        []bool
 	RecipientAddress       string
 	RecipientAmounts       []*big.Int
+	SelfOutputAmounts      []*big.Int
 	UseBlockedUtxos        bool
+	CreateBlockedUtxos     bool
 	ForceEmptyUtxos        bool
 	SkipLock               bool
 	MessageSeed            *big.Int
 	OriginalSender         string
+	Speculative            *types.SpeculativeTreeParams
+	SlippageValues         []*big.Int
 
 	Submit TransactSubmit
 

@@ -15,6 +15,38 @@ import (
 	"github.com/Hinkal-Protocol/hinkal-go/internal/types"
 )
 
+func buildZeroUtxo(chainID int, erc20Address string, shieldedPrivateKey string, spendingPublicKey []*big.Int) (*utxo.Utxo, error) {
+	mintAddress := ""
+	modifiedErc20TokenAddress := erc20Address
+	if constants.IsSolanaLike(chainID) {
+		mintAddress = erc20Address
+		formatted, err := solanautils.FormatMintAddress(erc20Address)
+		if err != nil {
+			return nil, err
+		}
+		modifiedErc20TokenAddress = formatted.CompressedAddress
+	}
+	return utxo.NewUtxo(types.UtxoParams{
+		Amount:            big.NewInt(0),
+		Erc20TokenAddress: modifiedErc20TokenAddress,
+		MintAddress:       mintAddress,
+		NullifyingKey:     shieldedPrivateKey,
+		SpendingPublicKey: spendingPublicKey,
+	})
+}
+
+func buildZeroUtxos(chainID int, erc20Address string, shieldedPrivateKey string, spendingPublicKey []*big.Int, count int) ([]*utxo.Utxo, error) {
+	utxos := make([]*utxo.Utxo, 0, count)
+	for i := 0; i < count; i++ {
+		padUtxo, err := buildZeroUtxo(chainID, erc20Address, shieldedPrivateKey, spendingPublicKey)
+		if err != nil {
+			return nil, err
+		}
+		utxos = append(utxos, padUtxo)
+	}
+	return utxos, nil
+}
+
 func AddPaddingToUtxos(
 	ctx context.Context,
 	hinkal ihinkal.HinkalInternal,
@@ -24,6 +56,7 @@ func AddPaddingToUtxos(
 	maxInput int,
 	forceEmptyUtxos bool,
 	useBlockedUtxos bool,
+	onChainCreation []bool,
 ) ([][]*utxo.Utxo, error) {
 	if maxInput == 0 {
 		maxInput = 6
@@ -66,15 +99,25 @@ func AddPaddingToUtxos(
 	inputUtxosArrayToBePadded := make([][]*utxo.Utxo, 0, len(erc20Addresses))
 	maxUtxoNum := 0
 	for i := 0; i < len(erc20Addresses); i++ {
-		if !forceEmptyUtxos {
+		switch {
+		case forceEmptyUtxos:
+			inputUtxosArrayToBePadded = append(inputUtxosArrayToBePadded, []*utxo.Utxo{})
+		case i < len(onChainCreation) && onChainCreation[i]:
+			zeroUtxos, zeroErr := buildZeroUtxos(chainID, erc20Addresses[i], shieldedPrivateKey, spendingPublicKey, 2)
+			if zeroErr != nil {
+				return nil, zeroErr
+			}
+			if len(zeroUtxos) > maxUtxoNum {
+				maxUtxoNum = len(zeroUtxos)
+			}
+			inputUtxosArrayToBePadded = append(inputUtxosArrayToBePadded, zeroUtxos)
+		default:
 			key := encodeTokenWithID(chainID, erc20Addresses[i])
 			inputUtxos := inputUtxosPerToken[key]
 			if len(inputUtxos) > maxUtxoNum {
 				maxUtxoNum = len(inputUtxos)
 			}
 			inputUtxosArrayToBePadded = append(inputUtxosArrayToBePadded, inputUtxos)
-		} else {
-			inputUtxosArrayToBePadded = append(inputUtxosArrayToBePadded, []*utxo.Utxo{})
 		}
 	}
 
@@ -97,32 +140,12 @@ func AddPaddingToUtxos(
 			}
 			inputUtxosArrayPadded = append(inputUtxosArrayPadded, firstSixUtxos)
 		} else {
-			tempUtxosStorage := append([]*utxo.Utxo{}, utxos...)
 			diff := maxInput - len(utxos)
-			for diff > 0 {
-				diff--
-				mintAddress := ""
-				modifiedErc20TokenAddress := erc20Addresses[i]
-				if constants.IsSolanaLike(chainID) {
-					mintAddress = erc20Addresses[i]
-					formatted, err := solanautils.FormatMintAddress(erc20Addresses[i])
-					if err != nil {
-						return nil, err
-					}
-					modifiedErc20TokenAddress = formatted.CompressedAddress
-				}
-				padUtxo, err := utxo.NewUtxo(types.UtxoParams{
-					Amount:            big.NewInt(0),
-					Erc20TokenAddress: modifiedErc20TokenAddress,
-					MintAddress:       mintAddress,
-					NullifyingKey:     shieldedPrivateKey,
-					SpendingPublicKey: spendingPublicKey,
-				})
-				if err != nil {
-					return nil, err
-				}
-				tempUtxosStorage = append(tempUtxosStorage, padUtxo)
+			pads, err := buildZeroUtxos(chainID, erc20Addresses[i], shieldedPrivateKey, spendingPublicKey, diff)
+			if err != nil {
+				return nil, err
 			}
+			tempUtxosStorage := append(append([]*utxo.Utxo{}, utxos...), pads...)
 			inputUtxosArrayPadded = append(inputUtxosArrayPadded, tempUtxosStorage)
 		}
 	}

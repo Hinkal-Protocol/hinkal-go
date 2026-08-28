@@ -41,6 +41,7 @@ type HinkalTransactionBatchRequestBody struct {
 	TxCompletionTime         *int                           `json:"txCompletionTime,omitempty"`
 	Ref                      string                         `json:"ref,omitempty"`
 	HashedDashboardAccountID string                         `json:"hashedDashboardAccountId,omitempty"`
+	DependsOnTxHash          string                         `json:"dependsOnTxHash,omitempty"`
 }
 
 type RelayerBatchMessage struct {

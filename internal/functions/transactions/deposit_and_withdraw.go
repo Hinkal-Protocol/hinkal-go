@@ -3,17 +3,18 @@ package transactions
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 	"strings"
-	"time"
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/Hinkal-Protocol/hinkal-go/internal/api"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/hinkal/ihinkal"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/utxo"
+	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/balance"
 	pretransaction "github.com/Hinkal-Protocol/hinkal-go/internal/functions/pre-transaction"
+	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/tron"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/utils"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/web3"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/types"
@@ -24,8 +25,7 @@ var (
 	errDepositAndWithdrawOneToken          = errors.New("transactions: depositAndWithdraw supports one token")
 	errRecipientAmountLengthMismatch       = errors.New("transactions: recipientAmounts and recipientAddresses length mismatch")
 	errUserDepositedUtxosEmpty             = errors.New("userDepositedUtxos must not be empty")
-	errNoUtxosInDepositTransaction         = errors.New("no UTXOs found in deposit transaction. Check contract address and ABI.")
-	errDepositedUtxosMissingFromMerkle     = errors.New("timeout while waiting for deposited UTXOs to appear in Merkle tree.")
+	errDepositProofMissingEncryptedOutputs = errors.New("transactions: deposit proof is missing encryptedOutputs for the deposited UTXOs")
 	errDepositAndWithdrawUnsupportedSolana = errors.New("transactions: use HinkalSolanaDepositAndWithdraw for Solana chains")
 )
 
@@ -79,63 +79,7 @@ func validateDepositAndWithdrawArgs(
 	return nil
 }
 
-func areAllDepositedUtxosInLastLeaves(deposited []recipientUtxo, lastLeaves []*big.Int) (bool, error) {
-	if len(deposited) == 0 {
-		return true, nil
-	}
-	leafSet := make(map[string]struct{}, len(lastLeaves))
-	for _, leaf := range lastLeaves {
-		leafSet[leaf.String()] = struct{}{}
-	}
-	for _, depositedUtxo := range deposited {
-		commitment, err := depositedUtxo.utxo.GetCommitment()
-		if err != nil {
-			return false, err
-		}
-		commitmentBig, err := utils.ParseBigInt(commitment)
-		if err != nil {
-			return false, err
-		}
-		if _, ok := leafSet[commitmentBig.String()]; !ok {
-			return false, nil
-		}
-	}
-	return true, nil
-}
-
-func waitForDepositedUtxosInMerkleTree(ctx context.Context, hinkal ihinkal.HinkalInternal, chainID int, deposited []recipientUtxo) error {
-	if len(deposited) == 0 {
-		return nil
-	}
-
-	if hinkal.GenerateProofRemotely() && constants.IsEnclaveTxChain(chainID) {
-		return nil
-	}
-	for attempt := 0; attempt < 60; attempt++ {
-		if err := hinkal.ResetMerkle(ctx, chainID); err != nil {
-			return err
-		}
-		var lastLeaves []*big.Int
-		if tree := hinkal.MerkleTree(chainID); tree != nil {
-			lastLeaves = tree.LastLeaves(20)
-		}
-		found, err := areAllDepositedUtxosInLastLeaves(deposited, lastLeaves)
-		if err != nil {
-			return err
-		}
-		if found {
-			return nil
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(time.Second):
-		}
-	}
-	return errDepositedUtxosMissingFromMerkle
-}
-
-func hinkalWithdrawBatch(
+func hinkalWithdrawBatchPrepare(
 	ctx context.Context,
 	hinkal ihinkal.HinkalInternal,
 	chainID int,
@@ -143,17 +87,15 @@ func hinkalWithdrawBatch(
 	userDepositedUtxos []recipientUtxo,
 	feeStructure types.FeeStructure,
 	ethereumAddress string,
-	hashedEthereumAddress string,
-	statusID string,
-	txCompletionTime *int,
-) (string, error) {
+	pendingLeaves []string,
+) ([]web3.TransactCallRelayerBatchItem, error) {
 	if len(userDepositedUtxos) == 0 {
-		return "", errUserDepositedUtxosEmpty
+		return nil, errUserDepositedUtxosEmpty
 	}
 	tokenAddress := erc20Token.Erc20TokenAddress
 	relay, err := relayerAddress(ctx, hinkal, chainID)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	transactions := make([]web3.TransactCallRelayerBatchItem, 0, len(userDepositedUtxos))
 
@@ -186,6 +128,16 @@ func hinkalWithdrawBatch(
 					}
 				}
 
+				inputUtxos := [][]*utxo.Utxo{{utxoToWithdraw}}
+				var speculative *types.SpeculativeTreeParams
+				if pendingLeaves != nil {
+					speculativeInputs, err := pretransaction.ToSpeculativeUtxos(inputUtxos)
+					if err != nil {
+						return err
+					}
+					speculative = &types.SpeculativeTreeParams{PendingLeaves: pendingLeaves, InputUtxos: speculativeInputs}
+				}
+
 				result, err := HinkalTransact(groupCtx, hinkal, HinkalTransactParams{
 					ChainID:          chainID,
 					Erc20Addresses:   []string{tokenAddress},
@@ -194,8 +146,9 @@ func hinkalWithdrawBatch(
 					ExternalAddress:  recipientAddressHex,
 					FeeStructure:     &feeStructure,
 					Relay:            relay,
-					InputUtxos:       [][]*utxo.Utxo{{utxoToWithdraw}},
+					InputUtxos:       inputUtxos,
 					UseBlockedUtxos:  true,
+					Speculative:      speculative,
 					SkipLock:         true,
 					Submit:           NewProofOnlySubmit(),
 				})
@@ -226,29 +179,195 @@ func hinkalWithdrawBatch(
 			})
 		}
 		if err := group.Wait(); err != nil {
-			return "", err
+			return nil, err
 		}
 		transactions = append(transactions, batchTransactions...)
 	}
 
-	api.SafeUpdateDepositAndWithdrawStatus(ctx, api.UpdateDepositAndWithdrawStatusRequestBody{
-		ID:                    statusID,
-		ChainID:               chainID,
-		HashedEthereumAddress: hashedEthereumAddress,
-		Phase:                 types.DepositAndWithdrawPhaseBeforeScheduleWithdraw,
-	})
-	scheduleID, err := web3.TransactCallRelayerBatch(ctx, chainID, transactions, hashedEthereumAddress, txCompletionTime, "", "")
+	return transactions, nil
+}
+
+func HinkalWithdrawBatch(
+	ctx context.Context,
+	hinkal ihinkal.HinkalInternal,
+	chainID int,
+	erc20Token types.ERC20Token,
+	userDepositedUtxos []recipientUtxo,
+	feeStructure types.FeeStructure,
+	ethereumAddress string,
+	hashedEthereumAddress string,
+	txCompletionTime *int,
+) (string, error) {
+	transactions, err := hinkalWithdrawBatchPrepare(
+		ctx, hinkal, chainID, erc20Token, userDepositedUtxos, feeStructure, ethereumAddress, nil,
+	)
 	if err != nil {
 		return "", err
 	}
-	api.SafeUpdateDepositAndWithdrawStatus(ctx, api.UpdateDepositAndWithdrawStatusRequestBody{
-		ID:                    statusID,
-		ChainID:               chainID,
-		HashedEthereumAddress: hashedEthereumAddress,
-		Phase:                 types.DepositAndWithdrawPhaseAfterScheduleWithdraw,
-		ScheduleID:            scheduleID,
+	return web3.TransactCallRelayerBatch(ctx, chainID, transactions, hashedEthereumAddress, txCompletionTime, "", "", "")
+}
+
+type depositAndWithdrawContext struct {
+	chainID               int
+	ethereumAddress       string
+	hashedEthereumAddress string
+	feeStructure          types.FeeStructure
+	txCompletionTime      *int
+	preEstimateGas        bool
+}
+
+func evmDepositAndWithdraw(
+	ctx context.Context,
+	hinkal ihinkal.HinkalInternal,
+	erc20Token types.ERC20Token,
+	recipientAmounts []*big.Int,
+	recipientAddresses []string,
+	depositContext depositAndWithdrawContext,
+) (types.DepositAndSendExtendedResult, error) {
+	chainID := depositContext.chainID
+	utxoAmounts, _ := depositAndWithdrawUtxoAmounts(recipientAmounts, depositContext.feeStructure)
+
+	preparedDeposit, err := PrepareDepositOnChainUtxos(ctx, hinkal, chainID, []types.ERC20Token{erc20Token}, [][]*big.Int{utxoAmounts})
+	if err != nil {
+		return types.DepositAndSendExtendedResult{}, err
+	}
+
+	recipientUtxos := make([]recipientUtxo, len(recipientAddresses))
+	for i, note := range preparedDeposit.DepositedUtxos[0] {
+		recipientUtxos[i] = recipientUtxo{recipientAddress: recipientAddresses[i], utxo: note}
+	}
+
+	var depositTxHash string
+	var batchTransactions []web3.TransactCallRelayerBatchItem
+	// Plain errgroup, not WithContext: a failing proof must not cancel a deposit already in flight.
+	var group errgroup.Group
+	group.Go(func() error {
+		var err error
+		depositTxHash, err = SubmitDepositOnChainUtxos(ctx, hinkal, preparedDeposit, depositContext.preEstimateGas)
+		return err
 	})
-	return scheduleID, nil
+	group.Go(func() error {
+		var err error
+		batchTransactions, err = hinkalWithdrawBatchPrepare(
+			ctx, hinkal, chainID, erc20Token, recipientUtxos, depositContext.feeStructure,
+			depositContext.ethereumAddress, preparedDeposit.PendingLeaves,
+		)
+		return err
+	})
+	if err := group.Wait(); err != nil {
+		return types.DepositAndSendExtendedResult{}, err
+	}
+
+	scheduleID, err := web3.TransactCallRelayerBatch(
+		ctx, chainID, batchTransactions, depositContext.hashedEthereumAddress,
+		depositContext.txCompletionTime, "", "", depositTxHash,
+	)
+	if err != nil {
+		return types.DepositAndSendExtendedResult{}, err
+	}
+	return types.DepositAndSendExtendedResult{DepositTxHash: depositTxHash, ScheduleID: scheduleID}, nil
+}
+
+func tronDepositAndWithdraw(
+	ctx context.Context,
+	hinkal ihinkal.HinkalInternal,
+	erc20Token types.ERC20Token,
+	recipientAmounts []*big.Int,
+	recipientAddresses []string,
+	depositContext depositAndWithdrawContext,
+) (types.DepositAndSendExtendedResult, error) {
+	chainID := depositContext.chainID
+	utxoAmounts, totalDepositAmount := depositAndWithdrawUtxoAmounts(recipientAmounts, depositContext.feeStructure)
+
+	depositResult, err := HinkalTransact(ctx, hinkal, HinkalTransactParams{
+		ChainID:            chainID,
+		Erc20Addresses:     []string{erc20Token.Erc20TokenAddress},
+		AmountChanges:      []*big.Int{totalDepositAmount},
+		ExternalAddress:    depositContext.ethereumAddress,
+		SelfOutputAmounts:  utxoAmounts,
+		CreateBlockedUtxos: true,
+		ForceEmptyUtxos:    true,
+		Submit:             NewProofOnlySubmit(),
+	})
+	if err != nil {
+		return types.DepositAndSendExtendedResult{}, err
+	}
+	depositProof := depositResult.Proof
+
+	if len(depositProof.CircomData.EncryptedOutputs) == 0 ||
+		len(depositProof.CircomData.EncryptedOutputs[0]) != len(utxoAmounts) {
+		return types.DepositAndSendExtendedResult{}, errDepositProofMissingEncryptedOutputs
+	}
+	recipientUtxos := make([]recipientUtxo, len(recipientAddresses))
+	for i, encryptedOutput := range depositProof.CircomData.EncryptedOutputs[0] {
+		note, err := balance.DecryptUtxoHex(encryptedOutput, hinkal.GetUserKeys())
+		if err != nil {
+			return types.DepositAndSendExtendedResult{}, err
+		}
+		recipientUtxos[i] = recipientUtxo{recipientAddress: recipientAddresses[i], utxo: note}
+	}
+
+	var pendingLeaves []string
+	for _, perToken := range depositProof.CircomData.OutCommitments {
+		for _, commitment := range perToken {
+			commitmentBig, err := utils.ParseBigInt(commitment)
+			if err != nil {
+				return types.DepositAndSendExtendedResult{}, err
+			}
+			if commitmentBig.Sign() == 0 {
+				continue
+			}
+			pendingLeaves = append(pendingLeaves, commitmentBig.String())
+		}
+	}
+
+	var depositTxHash string
+	var batchTransactions []web3.TransactCallRelayerBatchItem
+	// Plain errgroup, not WithContext: a failing proof must not cancel a deposit already in flight.
+	var group errgroup.Group
+	group.Go(func() error {
+		client, err := hinkal.GetTronWeb()
+		if err != nil {
+			return err
+		}
+		tron.SwapTronBCoordinate(&depositProof.ZkCallData)
+		depositTxHash, err = tron.TransactCallDirectTron(ctx, client, chainID, tron.TransactCallDirectTronParams{
+			Amounts:                   []*big.Int{totalDepositAmount},
+			TokensToApprove:           []types.ERC20Token{erc20Token},
+			ZkCallData:                depositProof.ZkCallData,
+			CircomData:                depositProof.CircomData,
+			DimData:                   depositProof.DimData,
+			PreEstimateGas:            depositContext.preEstimateGas,
+			PrecomputedProofSignature: depositProof.TronProofSignature,
+		})
+		if err != nil {
+			return err
+		}
+		if depositTxHash == "" {
+			return errDepositTxHashNotFound
+		}
+		return nil
+	})
+	group.Go(func() error {
+		var err error
+		batchTransactions, err = hinkalWithdrawBatchPrepare(
+			ctx, hinkal, chainID, erc20Token, recipientUtxos, depositContext.feeStructure,
+			depositContext.ethereumAddress, pendingLeaves,
+		)
+		return err
+	})
+	if err := group.Wait(); err != nil {
+		return types.DepositAndSendExtendedResult{}, err
+	}
+
+	scheduleID, err := web3.TransactCallRelayerBatch(
+		ctx, chainID, batchTransactions, depositContext.hashedEthereumAddress,
+		depositContext.txCompletionTime, "", "", depositTxHash,
+	)
+	if err != nil {
+		return types.DepositAndSendExtendedResult{}, err
+	}
+	return types.DepositAndSendExtendedResult{DepositTxHash: depositTxHash, ScheduleID: scheduleID}, nil
 }
 
 func HinkalDepositAndWithdraw(
@@ -273,7 +392,6 @@ func HinkalDepositAndWithdraw(
 	}
 
 	erc20Token := erc20Tokens[0]
-	tokenAddress := erc20Token.Erc20TokenAddress
 	rawEthereumAddress, err := hinkal.GetEthereumAddressByChain(ctx, chainID)
 	if err != nil {
 		return types.DepositAndSendExtendedResult{}, err
@@ -282,44 +400,30 @@ func HinkalDepositAndWithdraw(
 	if err != nil {
 		return types.DepositAndSendExtendedResult{}, err
 	}
-	hashedEthereumAddress := utils.HashEthereumAddress(ethereumAddress)
 
-	feeStructure, err := resolveDepositAndWithdrawFeeStructure(ctx, chainID, tokenAddress, feeStructureOverride)
+	feeStructure, err := resolveDepositAndWithdrawFeeStructure(ctx, chainID, erc20Token.Erc20TokenAddress, feeStructureOverride)
 	if err != nil {
 		return types.DepositAndSendExtendedResult{}, err
 	}
 
-	userDepositedUtxos, statusID, depositTxHash, err := HinkalDepositOnChainUtxos(
-		ctx,
-		hinkal,
-		chainID,
-		erc20Token,
-		recipientAmounts,
-		recipientAddresses,
-		feeStructure,
-		hashedEthereumAddress,
-		true,
-	)
-	if err != nil {
-		return types.DepositAndSendExtendedResult{}, err
+	depositContext := depositAndWithdrawContext{
+		chainID:               chainID,
+		ethereumAddress:       ethereumAddress,
+		hashedEthereumAddress: utils.HashEthereumAddress(ethereumAddress),
+		feeStructure:          feeStructure,
+		txCompletionTime:      txCompletionTime,
+		preEstimateGas:        preEstimateGas,
 	}
-	if err := waitForDepositedUtxosInMerkleTree(ctx, hinkal, chainID, userDepositedUtxos); err != nil {
-		return types.DepositAndSendExtendedResult{}, err
+
+	if !constants.IsTronLike(chainID) {
+		return evmDepositAndWithdraw(ctx, hinkal, erc20Token, recipientAmounts, recipientAddresses, depositContext)
 	}
-	scheduleID, err := hinkalWithdrawBatch(
-		ctx,
-		hinkal,
-		chainID,
-		erc20Token,
-		userDepositedUtxos,
-		feeStructure,
-		ethereumAddress,
-		hashedEthereumAddress,
-		statusID,
-		txCompletionTime,
-	)
-	if err != nil {
-		return types.DepositAndSendExtendedResult{}, err
+
+	if len(recipientAmounts) > constants.MaxTronSelfOutputs {
+		return types.DepositAndSendExtendedResult{}, fmt.Errorf(
+			"transactions: Tron supports at most %d recipients per deposit - no circuit emits more outputs",
+			constants.MaxTronSelfOutputs,
+		)
 	}
-	return types.DepositAndSendExtendedResult{DepositTxHash: depositTxHash, ScheduleID: scheduleID}, nil
+	return tronDepositAndWithdraw(ctx, hinkal, erc20Token, recipientAmounts, recipientAddresses, depositContext)
 }

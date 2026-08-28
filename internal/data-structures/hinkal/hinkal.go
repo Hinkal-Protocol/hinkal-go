@@ -5,13 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
-	"strings"
 	"sync"
 	"time"
 
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/Hinkal-Protocol/hinkal-go/internal/api"
@@ -191,7 +189,7 @@ func (h *Hinkal) GetHinkalTreeRootHash(ctx context.Context, chainID int) (*big.I
 	if hinkalAddress == "" {
 		return nil, fmt.Errorf("getHinkalTreeRootHash: chain %d is not synced", chainID)
 	}
-	rpcURL, err := constants.FetchRPCURL(chainID)
+	rpcURL, err := constants.RPCURL(chainID)
 	if err != nil {
 		return nil, err
 	}
@@ -201,10 +199,10 @@ func (h *Hinkal) GetHinkalTreeRootHash(ctx context.Context, chainID int) (*big.I
 		if err != nil {
 			return nil, err
 		}
-		client := solana.NewClient(rpcURL)
+		client := api.NewSolanaClientWithFallback(rpcURL)
 		return solana.FetchMerkleTreeRootHash(ctx, client, hinkalAddress, originalDeployer)
 	}
-	client, err := ethclient.DialContext(ctx, rpcURL)
+	client, err := api.DialEthClientWithFallback(chainID, rpcURL)
 	if err != nil {
 		return nil, err
 	}
@@ -257,34 +255,16 @@ func (h *Hinkal) MerkleTree(chainID int) merkletree.MerkleTree {
 	return h.merkleTree(chainID)
 }
 
-func (h *Hinkal) GetBalances(
+// GetTotalBalances serves every chain from one enclave request. Chains that failed are
+// omitted from the result.
+func (h *Hinkal) GetTotalBalances(
 	ctx context.Context,
-	chainID int,
-	passedShieldedPublicKey string,
-	ethAddress string,
-	resetCacheBefore bool,
-	useBlockedUtxos bool,
-) (map[string]types.TokenBalance, error) {
-	return balance.GetShieldedBalance(
-		ctx,
-		h,
-		chainID,
-		passedShieldedPublicKey,
-		ethAddress,
-		resetCacheBefore,
-		h.generateProofRemotely,
-		useBlockedUtxos,
-	)
-}
-
-func (h *Hinkal) GetTotalBalance(
-	ctx context.Context,
-	chainID int,
+	chainIDs []int,
 	userKeys *cryptokeys.UserKeys,
 	ethAddress string,
 	resetCacheBefore bool,
 	useBlockedUtxos bool,
-) ([]types.TokenBalance, error) {
+) (map[int][]types.TokenBalance, error) {
 	uk := userKeys
 	if uk == nil {
 		uk = h.UserKeys
@@ -294,56 +274,80 @@ func (h *Hinkal) GetTotalBalance(
 		return nil, err
 	}
 
-	shieldedBalances, err := h.GetBalances(
+	ethAddressByChain := make(map[int]string, len(chainIDs))
+	for _, chainID := range chainIDs {
+		addr := ethAddress
+		if addr == "" {
+			addr, err = h.GetEthereumAddressByChain(ctx, chainID)
+			if err != nil {
+				return nil, err
+			}
+		}
+		ethAddressByChain[chainID] = addr
+	}
+
+	return balance.GetShieldedBalances(
 		ctx,
-		chainID,
+		h,
+		ethAddressByChain,
 		shieldedPublicKey,
-		ethAddress,
 		resetCacheBefore,
+		h.generateProofRemotely,
 		useBlockedUtxos,
 	)
-	if err != nil {
-		return nil, err
-	}
-
-	tokenRegistry, err := api.GetTokensForChain(ctx, chainID)
-	if err != nil {
-		return nil, err
-	}
-	totalBalances := make([]types.TokenBalance, 0, len(tokenRegistry))
-	for _, token := range tokenRegistry {
-		shieldedBalance, ok := shieldedBalances[strings.ToLower(token.Erc20TokenAddress)]
-		tokenBalance := new(big.Int)
-		timestamp := "0"
-		if ok {
-			if shieldedBalance.Balance != nil {
-				tokenBalance = shieldedBalance.Balance
-			}
-			if shieldedBalance.Timestamp != "" {
-				timestamp = shieldedBalance.Timestamp
-			}
-		}
-		totalBalances = append(totalBalances, types.TokenBalance{
-			Token:     token,
-			Balance:   tokenBalance,
-			Timestamp: timestamp,
-		})
-	}
-	return totalBalances, nil
 }
 
-func (h *Hinkal) GetStuckShieldedBalances(ctx context.Context, chainID int, userKeys *cryptokeys.UserKeys, ethAddress string) ([]types.TokenBalance, error) {
-	balances, err := h.GetTotalBalance(ctx, chainID, userKeys, ethAddress, false, true)
+// GetTotalBalance is deprecated: use GetTotalBalances instead. Kept for backward compatibility.
+func (h *Hinkal) GetTotalBalance(
+	ctx context.Context,
+	chainID int,
+	userKeys *cryptokeys.UserKeys,
+	ethAddress string,
+	resetCacheBefore bool,
+	useBlockedUtxos bool,
+) ([]types.TokenBalance, error) {
+	balancesByChain, err := h.GetTotalBalances(ctx, []int{chainID}, userKeys, ethAddress, resetCacheBefore, useBlockedUtxos)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]types.TokenBalance, 0, len(balances))
-	for _, b := range balances {
-		if b.Balance.Sign() > 0 {
-			out = append(out, b)
+	return balancesByChain[chainID], nil
+}
+
+func (h *Hinkal) GetStuckShieldedBalances(
+	ctx context.Context,
+	chainIDs []int,
+	userKeys *cryptokeys.UserKeys,
+	ethAddress string,
+) (map[int][]types.TokenBalance, error) {
+	balancesByChain, err := h.GetTotalBalances(ctx, chainIDs, userKeys, ethAddress, false, true)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[int][]types.TokenBalance, len(balancesByChain))
+	for chainID, balances := range balancesByChain {
+		nonZero := make([]types.TokenBalance, 0, len(balances))
+		for _, b := range balances {
+			if b.Balance.Sign() > 0 {
+				nonZero = append(nonZero, b)
+			}
 		}
+		out[chainID] = nonZero
 	}
 	return out, nil
+}
+
+// GetStuckShieldedBalance is deprecated: use GetStuckShieldedBalances instead. Kept for backward compatibility.
+func (h *Hinkal) GetStuckShieldedBalance(
+	ctx context.Context,
+	chainID int,
+	userKeys *cryptokeys.UserKeys,
+	ethAddress string,
+) ([]types.TokenBalance, error) {
+	balancesByChain, err := h.GetStuckShieldedBalances(ctx, []int{chainID}, userKeys, ethAddress)
+	if err != nil {
+		return nil, err
+	}
+	return balancesByChain[chainID], nil
 }
 
 func (h *Hinkal) GetRandomRelay(ctx context.Context, chainID int, markAsPending bool) (string, error) {

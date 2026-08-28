@@ -25,12 +25,12 @@ func enclavePost[T any](ctx context.Context, path string, payload any) (T, error
 	if err != nil {
 		return dest, err
 	}
-	keyCiphertext, inputCiphertext, err := MakeHandshakeAndEncrypt(ctx, body)
+	handshake, err := MakeHandshakeAndEncrypt(ctx, body)
 	if err != nil {
 		return dest, err
 	}
 	var signed types.SignedEnclaveResponse
-	reqBody := map[string]any{"key": keyCiphertext, "inputs": inputCiphertext}
+	reqBody := map[string]any{"key": handshake.KeyCiphertext, "inputs": handshake.InputCiphertext}
 	if err := api.Post(ctx, constants.GetEnclaveURL()+path, reqBody, &signed); err != nil {
 		return dest, err
 	}
@@ -48,9 +48,25 @@ func bigIntStrings(values []*big.Int) []string {
 	return out
 }
 
-func buildPrepareTxRequest(p types.PrepareTxParams, nullifyingKey string, spendingPublicKey [2]string) types.PrepareTxRequestType {
+func bigIntStringsNested(values [][]*big.Int) [][]string {
+	if values == nil {
+		return nil
+	}
+	out := make([][]string, len(values))
+	for i, v := range values {
+		out[i] = bigIntStrings(v)
+	}
+	return out
+}
+
+func buildPrepareTxRequest(p types.PrepareTxParams, nullifyingKey string, spendingPublicKey [2]string) (types.PrepareTxRequestType, error) {
+	hinkalAddress, err := constants.HinkalAddress(p.ChainID)
+	if err != nil {
+		return types.PrepareTxRequestType{}, err
+	}
 	req := types.PrepareTxRequestType{
 		ChainID:                strconv.Itoa(p.ChainID),
+		HinkalAddress:          hinkalAddress,
 		Erc20Addresses:         p.Erc20Addresses,
 		AmountChanges:          bigIntStrings(p.AmountChanges),
 		ExternalAddress:        p.ExternalAddress,
@@ -60,12 +76,16 @@ func buildPrepareTxRequest(p types.PrepareTxParams, nullifyingKey string, spendi
 		ExternalActionMetadata: p.ExternalActionMetadata,
 		OnChainCreation:        p.OnChainCreation,
 		RecipientAddress:       p.RecipientAddress,
-		RecipientAmounts:       bigIntStrings(p.RecipientAmounts),
+		RecipientAmounts:       bigIntStringsNested(p.RecipientAmounts),
+		SelfOutputAmounts:      bigIntStrings(p.SelfOutputAmounts),
 		InputCommitments:       p.InputCommitments,
 		UseBlockedUtxos:        p.UseBlockedUtxos,
+		CreateBlockedUtxos:     p.CreateBlockedUtxos,
 		ForceEmptyUtxos:        p.ForceEmptyUtxos,
 		SkipLock:               p.SkipLock,
+		Speculative:            p.Speculative,
 		NullifyingKey:          nullifyingKey,
+		SlippageValues:         bigIntStrings(p.SlippageValues),
 		SpendingPublicKey:      spendingPublicKey,
 	}
 	if p.FeeStructure != nil {
@@ -78,12 +98,13 @@ func buildPrepareTxRequest(p types.PrepareTxParams, nullifyingKey string, spendi
 	if p.MessageSeed != nil {
 		req.MessageSeed = p.MessageSeed.String()
 	}
-	return req
+	return req, nil
 }
 
 func assertPrepareTxEchoMatches(payload types.PrepareTxRequestType, echoed types.EchoedPrepareTxRequestType) error {
 	expected := types.EchoedPrepareTxRequestType{
 		ChainID:                payload.ChainID,
+		HinkalAddress:          payload.HinkalAddress,
 		Erc20Addresses:         payload.Erc20Addresses,
 		AmountChanges:          payload.AmountChanges,
 		ExternalAddress:        payload.ExternalAddress,
@@ -95,11 +116,15 @@ func assertPrepareTxEchoMatches(payload types.PrepareTxRequestType, echoed types
 		OnChainCreation:        payload.OnChainCreation,
 		RecipientAddress:       payload.RecipientAddress,
 		RecipientAmounts:       payload.RecipientAmounts,
+		SlippageValues:         payload.SlippageValues,
+		SelfOutputAmounts:      payload.SelfOutputAmounts,
 		InputCommitments:       payload.InputCommitments,
 		UseBlockedUtxos:        payload.UseBlockedUtxos,
+		CreateBlockedUtxos:     payload.CreateBlockedUtxos,
 		ForceEmptyUtxos:        payload.ForceEmptyUtxos,
 		SkipLock:               payload.SkipLock,
 		MessageSeed:            payload.MessageSeed,
+		Speculative:            payload.Speculative,
 	}
 	if !reflect.DeepEqual(expected, echoed) {
 		return errPrepareTxEchoMismatch
@@ -110,6 +135,7 @@ func assertPrepareTxEchoMatches(payload types.PrepareTxRequestType, echoed types
 func assertPrepareStuckWithdrawEchoMatches(payload types.PrepareStuckWithdrawRequestType, echoed types.EchoedPrepareStuckWithdrawRequestType) error {
 	expected := types.EchoedPrepareStuckWithdrawRequestType{
 		ChainID:               payload.ChainID,
+		HinkalAddress:         payload.HinkalAddress,
 		Erc20Address:          payload.Erc20Address,
 		ExternalAddress:       payload.ExternalAddress,
 		Relay:                 payload.Relay,
@@ -132,7 +158,10 @@ func PrepareTxEnclaveCall(ctx context.Context, uk *cryptokeys.UserKeys, params t
 		return types.PrepareTxResponseType{}, err
 	}
 	spendingPublicKey := [2]string{pair.PubSpendingBJJPoint[0].String(), pair.PubSpendingBJJPoint[1].String()}
-	payload := buildPrepareTxRequest(params, nullifyingKey, spendingPublicKey)
+	payload, err := buildPrepareTxRequest(params, nullifyingKey, spendingPublicKey)
+	if err != nil {
+		return types.PrepareTxResponseType{}, err
+	}
 
 	resp, err := enclavePost[types.PrepareTxResponseType](ctx, constants.EnclaveConfig.PrepareTx, payload)
 	if err != nil {
@@ -162,8 +191,13 @@ func PrepareStuckWithdrawEnclaveCall(ctx context.Context, uk *cryptokeys.UserKey
 	if err != nil {
 		return nil, err
 	}
+	hinkalAddress, err := constants.HinkalAddress(params.ChainID)
+	if err != nil {
+		return nil, err
+	}
 	payload := types.PrepareStuckWithdrawRequestType{
 		ChainID:         strconv.Itoa(params.ChainID),
+		HinkalAddress:   hinkalAddress,
 		Erc20Address:    params.Erc20Address,
 		ExternalAddress: params.ExternalAddress,
 		Relay:           params.Relay,

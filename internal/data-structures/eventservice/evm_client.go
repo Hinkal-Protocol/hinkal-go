@@ -5,14 +5,14 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethclient"
 
+	"github.com/Hinkal-Protocol/hinkal-go/internal/api"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/contractabi"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/types"
 )
 
 func NewEVMEmitter(chainID int, rpcURL, contractAddress string, initialBlock uint64, eventsFetchingMutex *sync.RWMutex) (*BlockchainEventEmitter, error) {
-	client, err := ethclient.Dial(rpcURL)
+	client, err := api.DialEthClientWithFallback(chainID, rpcURL)
 	if err != nil {
 		return nil, fmt.Errorf("dial rpc: %w", err)
 	}

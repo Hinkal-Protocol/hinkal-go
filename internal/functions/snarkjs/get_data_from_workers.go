@@ -104,14 +104,17 @@ func areLocalTreesUpToDate(ctx context.Context, chainID int, merkleTree merkletr
 	return localRoot.Cmp(onChainRoot) == 0
 }
 
-func GetMerkleTreeSiblingsAndRootHashes(ctx context.Context, chainID int, merkleTree merkletree.MerkleTree, inputUtxos [][]*utxo.Utxo) (merkleTreeSiblingsAndRootHashes, error) {
+func GetMerkleTreeSiblingsAndRootHashes(ctx context.Context, chainID int, merkleTree merkletree.MerkleTree, inputUtxos [][]*utxo.Utxo, isSpeculativeTree bool) (merkleTreeSiblingsAndRootHashes, error) {
+	if isSpeculativeTree {
+		return handleLocalMerkleTrees(merkleTree, inputUtxos)
+	}
 	if areLocalTreesUpToDate(ctx, chainID, merkleTree) || constants.IsLocalNetwork(chainID) {
 		return handleLocalMerkleTrees(merkleTree, inputUtxos)
 	}
 	return handleRemoteMerkleTrees(ctx, chainID, inputUtxos)
 }
 
-func GetDataFromWorkers(ctx context.Context, chainID int, merkleTree merkletree.MerkleTree, inputUtxos [][]*utxo.Utxo) (MerkleDataFromWorkers, error) {
+func GetDataFromWorkers(ctx context.Context, chainID int, merkleTree merkletree.MerkleTree, inputUtxos [][]*utxo.Utxo, isSpeculativeTree bool) (MerkleDataFromWorkers, error) {
 	if HasOnlyZeroAmounts(inputUtxos) {
 		zeroData := BuildZeroInputMerkleDataFromSerialized(inputUtxos)
 		var rootHash, rootHashIndex *big.Int
@@ -138,7 +141,7 @@ func GetDataFromWorkers(ctx context.Context, chainID int, merkleTree merkletree.
 		}, nil
 	}
 
-	siblings, err := GetMerkleTreeSiblingsAndRootHashes(ctx, chainID, merkleTree, inputUtxos)
+	siblings, err := GetMerkleTreeSiblingsAndRootHashes(ctx, chainID, merkleTree, inputUtxos, isSpeculativeTree)
 	if err != nil {
 		return MerkleDataFromWorkers{}, err
 	}

@@ -22,6 +22,7 @@ type SolanaArgs struct {
 	RelayerFee       string            `json:"relayerFee"`
 	VariableRate     *string           `json:"variableRate,omitempty"`
 	Dimensions       types.DimDataType `json:"dimensions"`
+	RootHashIndex    string            `json:"rootHashIndex"`
 }
 
 type SolanaHinkalInstruction struct {
@@ -32,7 +33,9 @@ type SolanaHinkalInstruction struct {
 
 type SolanaSwapArgs struct {
 	SolanaArgs
-	HinkalInstructions []SolanaHinkalInstruction `json:"hinkalInstructions"`
+	OnChainEncryptedOutput string                    `json:"onChainEncryptedOutput"`
+	OnChainCreation        []bool                    `json:"onChainCreation"`
+	HinkalInstructions     []SolanaHinkalInstruction `json:"hinkalInstructions"`
 }
 
 type SolanaTransactAccounts struct {
@@ -77,6 +80,7 @@ type SolanaTransactionBatchRequestBody struct {
 	TxCompletionTime         *int                    `json:"txCompletionTime,omitempty"`
 	Ref                      string                  `json:"ref,omitempty"`
 	HashedDashboardAccountID string                  `json:"hashedDashboardAccountId,omitempty"`
+	DependsOnTxHash          string                  `json:"dependsOnTxHash,omitempty"`
 }
 
 func CallRelayerSolanaTransactAPI(ctx context.Context, body SolanaTransactionBody) (RelayerResponse, error) {

@@ -72,6 +72,7 @@ func GetSolanaCalldataHash(
 	dimensions types.DimDataType,
 	recipient, signer solana.PublicKey,
 	encryptedOutputs [][]byte,
+	onChainEncryptedOutput []byte,
 	relayerFee, variableRate *big.Int,
 	instructions []HinkalInstruction,
 	remainingAccounts []solana.AccountMeta,
@@ -88,6 +89,8 @@ func GetSolanaCalldataHash(
 		bytes = appendBE(bytes, len(cur), 8)
 		bytes = append(bytes, cur...)
 	}
+
+	bytes = append(bytes, onChainEncryptedOutput...)
 
 	bytes = append(bytes, bigToBE(relayerFee, 8)...)
 	bytes = append(bytes, bigToBE(variableRate, 8)...)

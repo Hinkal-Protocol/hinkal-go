@@ -23,6 +23,9 @@ var ServerConfig = struct {
 	GetTokensInfo                 string
 	GetTokensForChain             string
 	GetTokenData                  func(tokenSymbol string) string
+	RouteConfig                   string
+	EvmRpcProxy                   func(chainID int, key string) string
+	SolanaRpcProxy                func(key string) string
 }{
 	CallLifiAPI:           "/LifiBridgeData",
 	CallOkxAPI:            "/OkxSwapData",
@@ -43,6 +46,9 @@ var ServerConfig = struct {
 	GetTokensInfo:              "/get-tokens-info",
 	GetTokensForChain:          "/get-tokens-for-chain",
 	GetTokenData:               func(tokenSymbol string) string { return "/get-token-data/" + tokenSymbol },
+	RouteConfig:                "/rc",
+	EvmRpcProxy:                func(chainID int, key string) string { return fmt.Sprintf("/evm/%d/%s", chainID, key) },
+	SolanaRpcProxy:             func(key string) string { return "/solana/" + key },
 }
 
 // SnapshotServerConfig holds snapshot-server route paths. In server.constants.ts
@@ -71,7 +77,6 @@ var RelayerConfig = struct {
 	GetScheduledTransactions                 string
 	GetScheduledTransactionByID              func(scheduleID string) string
 	GetScheduledTransactionsNullifierIndexes string
-	UpdateDepositAndWithdrawStatus           string
 	GetTokenPriceChartData                   string
 	GetTokenPreviousDayPrices                string
 	GetPrivateTransactionsRatio              func(hashedOwner string) string
@@ -95,7 +100,6 @@ var RelayerConfig = struct {
 	GetScheduledTransactions:                 "/scheduled-transactions",
 	GetScheduledTransactionByID:              func(scheduleID string) string { return "/scheduled-transactions/" + scheduleID },
 	GetScheduledTransactionsNullifierIndexes: "/scheduled-transactions/nullifier-indexes",
-	UpdateDepositAndWithdrawStatus:           "/update-deposit-and-withdraw-status",
 	GetTokenPriceChartData:                   "/get-token-price-chart-data",
 	GetTokenPreviousDayPrices:                "/get-token-previous-day-prices",
 	GetPrivateTransactionsRatio:              func(hashedOwner string) string { return "/get-private-transactions-ratio/" + hashedOwner },
@@ -104,29 +108,37 @@ var RelayerConfig = struct {
 
 // EnclaveConfig holds enclave-server route paths (inlined in TS enclave calls).
 var EnclaveConfig = struct {
-	Handshake            string
-	DecryptUtxos         string
-	GenerateProofs       string
-	StoreUtxo            string
-	GetUtxos             string
-	StoreAndGetSignature string
-	SignProof            string
-	PrepareTx            string
-	PrepareStuckWithdraw string
-	FinalizeTx           string
-	FinalizeTxRelay      string
-	GetBalances          string
+	Handshake                  string
+	DecryptUtxos               string
+	GenerateProofs             string
+	StoreClaimableKey          string
+	GetUtxos                   string
+	StoreAndGetSignature       string
+	SignProof                  string
+	PrepareTx                  string
+	PrepareSolanaTx            string
+	PrepareStuckWithdraw       string
+	PrepareSolanaStuckWithdraw string
+	FinalizeTx                 string
+	FinalizeSolanaTx           string
+	FinalizeTxRelay            string
+	FinalizeSolanaTxRelay      string
+	GetBalances                string
 }{
-	Handshake:            "/handshake",
-	DecryptUtxos:         "/decrypt-utxos",
-	GenerateProofs:       "/generate-proofs",
-	StoreUtxo:            "/store-utxo",
-	GetUtxos:             "/get-utxos",
-	StoreAndGetSignature: "/store-and-get-signature",
-	SignProof:            "/sign-proof",
-	GetBalances:          "/get-balances",
-	PrepareTx:            "/prepare-tx",
-	PrepareStuckWithdraw: "/prepare-stuck-withdraw",
-	FinalizeTx:           "/finalize-tx",
-	FinalizeTxRelay:      "/finalize-tx-relay",
+	Handshake:                  "/handshake",
+	DecryptUtxos:               "/decrypt-utxos",
+	GenerateProofs:             "/generate-proofs",
+	StoreClaimableKey:          "/store-claimable-key",
+	GetUtxos:                   "/get-user-utxos",
+	StoreAndGetSignature:       "/store-and-get-user-signature",
+	SignProof:                  "/sign-proof",
+	GetBalances:                "/get-user-balances",
+	PrepareTx:                  "/prepare-tx",
+	PrepareSolanaTx:            "/prepare-solana-tx",
+	PrepareStuckWithdraw:       "/prepare-stuck-withdraw",
+	PrepareSolanaStuckWithdraw: "/prepare-solana-stuck-withdraw",
+	FinalizeTx:                 "/finalize-tx",
+	FinalizeSolanaTx:           "/finalize-solana-tx",
+	FinalizeTxRelay:            "/finalize-tx-relay",
+	FinalizeSolanaTxRelay:      "/finalize-solana-tx-relay",
 }

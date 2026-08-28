@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/ethclient"
 
+	"github.com/Hinkal-Protocol/hinkal-go/internal/api"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/tron"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/types"
@@ -42,11 +43,11 @@ func (a *TronProviderAdapter) InitConnector(ctx context.Context, connector types
 	if err != nil {
 		return err
 	}
-	evmRPCURL, err := constants.FetchRPCURL(*a.chainID)
+	evmRPCURL, err := constants.RPCURL(*a.chainID)
 	if err != nil {
 		return err
 	}
-	evmClient, err := ethclient.Dial(evmRPCURL)
+	evmClient, err := api.DialEthClientWithFallback(*a.chainID, evmRPCURL)
 	if err != nil {
 		return fmt.Errorf("dial tron EVM compat RPC: %w", err)
 	}

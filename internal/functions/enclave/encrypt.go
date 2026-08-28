@@ -7,6 +7,7 @@ import (
 	"crypto/sha1"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -67,26 +68,61 @@ func symmetricEncrypt(key *[secretKeyBytes]byte, message []byte) (string, error)
 	return base64.StdEncoding.EncodeToString(combined), nil
 }
 
-func encryptUint8ArrayForEnclave(input []byte, publicKeyB64 string) (keyCiphertext, inputCiphertext string, err error) {
-	var key [secretKeyBytes]byte
-	if _, err = rand.Read(key[:]); err != nil {
-		return "", "", err
-	}
-	keyCiphertext, err = asymmetricEncrypt(publicKeyB64, key[:])
-	if err != nil {
-		return "", "", err
-	}
-	inputCiphertext, err = symmetricEncrypt(&key, input)
-	if err != nil {
-		return "", "", err
-	}
-	return keyCiphertext, inputCiphertext, nil
+type Handshake struct {
+	KeyCiphertext   string
+	InputCiphertext string
+	Key             [secretKeyBytes]byte
 }
 
-func MakeHandshakeAndEncrypt(ctx context.Context, input []byte) (keyCiphertext, inputCiphertext string, err error) {
+func encryptUint8ArrayForEnclave(input []byte, publicKeyB64 string) (Handshake, error) {
+	var key [secretKeyBytes]byte
+	if _, err := rand.Read(key[:]); err != nil {
+		return Handshake{}, err
+	}
+	keyCiphertext, err := asymmetricEncrypt(publicKeyB64, key[:])
+	if err != nil {
+		return Handshake{}, err
+	}
+	inputCiphertext, err := symmetricEncrypt(&key, input)
+	if err != nil {
+		return Handshake{}, err
+	}
+	return Handshake{KeyCiphertext: keyCiphertext, InputCiphertext: inputCiphertext, Key: key}, nil
+}
+
+func MakeHandshakeAndEncrypt(ctx context.Context, input []byte) (Handshake, error) {
 	pk, err := enclaveHandshakeService.GetPublicKey(ctx)
 	if err != nil {
-		return "", "", err
+		return Handshake{}, err
 	}
 	return encryptUint8ArrayForEnclave(input, pk)
+}
+
+type sealedEnclaveResponse struct {
+	Encrypted string `json:"encrypted"`
+}
+
+func OpenSealedResponse[T any](raw json.RawMessage, key [secretKeyBytes]byte) (T, error) {
+	var dest T
+	var sealed sealedEnclaveResponse
+	if err := json.Unmarshal(raw, &sealed); err != nil || sealed.Encrypted == "" {
+		return dest, errors.New("enclave answered in plaintext - refusing an unencrypted response")
+	}
+	combined, err := base64.StdEncoding.DecodeString(sealed.Encrypted)
+	if err != nil {
+		return dest, fmt.Errorf("decode sealed response: %w", err)
+	}
+	if len(combined) < nonceBytes {
+		return dest, errors.New("sealed response too short")
+	}
+	var nonce [nonceBytes]byte
+	copy(nonce[:], combined[:nonceBytes])
+	plaintext, ok := secretbox.Open(nil, combined[nonceBytes:], &nonce, &key)
+	if !ok {
+		return dest, errors.New("failed to open sealed response")
+	}
+	if err := json.Unmarshal(plaintext, &dest); err != nil {
+		return dest, fmt.Errorf("parse sealed response: %w", err)
+	}
+	return dest, nil
 }

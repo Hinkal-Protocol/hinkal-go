@@ -3,6 +3,7 @@ package transactions
 import (
 	"context"
 	"math/big"
+	"strconv"
 	"strings"
 
 	solana "github.com/gagliardetto/solana-go"
@@ -10,13 +11,10 @@ import (
 
 	"github.com/Hinkal-Protocol/hinkal-go/internal/api"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
-	cryptokeys "github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/crypto-keys"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/hinkal/ihinkal"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/utxo"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/fees"
-	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/onchainutxos"
 	pretransaction "github.com/Hinkal-Protocol/hinkal-go/internal/functions/pre-transaction"
-	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/snarkjs"
 	solanautils "github.com/Hinkal-Protocol/hinkal-go/internal/functions/solana"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/utils"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/web3"
@@ -57,99 +55,7 @@ func solanaDepositAndWithdrawUtxoAmounts(recipientAmounts []*big.Int, feeStructu
 	return amounts
 }
 
-func hinkalSolanaMultiPaymentDeposit(
-	ctx context.Context,
-	hinkal ihinkal.HinkalInternal,
-	chainID int,
-	token types.ERC20Token,
-	recipientAmounts []*big.Int,
-	recipientAddresses []string,
-	feeStructure types.FeeStructure,
-	hashedEthereumAddress string,
-) ([]recipientUtxo, string, string, error) {
-	amounts := solanaDepositAndWithdrawUtxoAmounts(recipientAmounts, feeStructure)
-	structures, err := getProoflessStealthAddressStructures(hinkal, len(amounts), nil)
-	if err != nil {
-		return nil, "", "", err
-	}
-	if err := validateSolanaDepositArgs(amounts, structures); err != nil {
-		return nil, "", "", err
-	}
-
-	programID, err := solana.PublicKeyFromBase58(hinkal.HinkalAddress(chainID))
-	if err != nil {
-		return nil, "", "", err
-	}
-	originalDeployerStr, err := constants.OriginalDeployer(chainID)
-	if err != nil {
-		return nil, "", "", err
-	}
-	originalDeployer, err := solana.PublicKeyFromBase58(originalDeployerStr)
-	if err != nil {
-		return nil, "", "", err
-	}
-	signer, err := hinkal.GetSolanaPublicKey(ctx)
-	if err != nil {
-		return nil, "", "", err
-	}
-	connection, err := hinkal.GetSolanaConnection()
-	if err != nil {
-		return nil, "", "", err
-	}
-
-	instruction, err := buildMultiPaymentDepositInstruction(programID, signer, originalDeployer, token.Erc20TokenAddress, amounts, structures, true)
-	if err != nil {
-		return nil, "", "", err
-	}
-
-	statusResp, err := api.UpdateDepositAndWithdrawStatus(ctx, api.UpdateDepositAndWithdrawStatusRequestBody{
-		ChainID:               chainID,
-		HashedEthereumAddress: hashedEthereumAddress,
-		Phase:                 types.DepositAndWithdrawPhaseBeforeDeposit,
-	})
-	if err != nil {
-		return nil, "", "", err
-	}
-
-	signature, err := signAndSendSolanaInstructions(ctx, hinkal, programID, connection, signer, []solana.Instruction{instruction})
-	if err != nil {
-		return nil, "", "", err
-	}
-	if _, err := hinkal.WaitForTransaction(ctx, chainID, signature, 1); err != nil {
-		return nil, "", "", err
-	}
-	tx, err := solanautils.FetchTransactionWithRetry(ctx, chainID, signature)
-	if err != nil {
-		return nil, "", "", err
-	}
-
-	api.SafeUpdateDepositAndWithdrawStatus(ctx, api.UpdateDepositAndWithdrawStatusRequestBody{
-		ID:                    statusResp.ID,
-		ChainID:               chainID,
-		HashedEthereumAddress: hashedEthereumAddress,
-		Phase:                 types.DepositAndWithdrawPhaseAfterDeposit,
-		DepositTxHash:         signature,
-	})
-
-	formattedMint, err := solanautils.FormatMintAddress(token.Erc20TokenAddress)
-	if err != nil {
-		return nil, "", "", err
-	}
-	depositedUtxos, err := onchainutxos.DecodeSolanaFromTransaction(tx, hinkal.GetUserKeys(), formattedMint.CompressedAddress)
-	if err != nil {
-		return nil, "", "", err
-	}
-	if len(depositedUtxos) == 0 {
-		return nil, "", "", errNoUtxosInDepositTransaction
-	}
-	userDepositedUtxos, err := matchRecipientUtxos(recipientAddresses, amounts, depositedUtxos)
-	if err != nil {
-		return nil, "", "", err
-	}
-	return userDepositedUtxos, statusResp.ID, signature, nil
-}
-
-func hinkalSolanaWithdrawBatch(
+func solanaWithdrawBatchPrepare(
 	ctx context.Context,
 	hinkal ihinkal.HinkalInternal,
 	chainID int,
@@ -157,26 +63,19 @@ func hinkalSolanaWithdrawBatch(
 	userDepositedUtxos []recipientUtxo,
 	feeStructure types.FeeStructure,
 	ethereumAddress string,
-	hashedEthereumAddress string,
 	recipientAmounts []*big.Int,
-	statusID string,
-	txCompletionTime *int,
-) (string, error) {
+	pendingLeaves []string,
+) ([]api.SolanaTransactionBody, error) {
 	if len(userDepositedUtxos) == 0 {
-		return "", errUserDepositedUtxosEmpty
+		return nil, errUserDepositedUtxosEmpty
 	}
 	mintAddress := token.Erc20TokenAddress
 	relay, err := relayerAddress(ctx, hinkal, chainID)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	withdrawTimeStamp := new(big.Int).SetInt64(utils.GetCurrentTimeInSeconds()).String()
 	transactions := make([]api.SolanaTransactionBody, 0, len(userDepositedUtxos))
-
-	shieldedPrivateKey, err := hinkal.GetUserKeys().GetShieldedPrivateKey()
-	if err != nil {
-		return "", err
-	}
 
 	generateProofRemotely := hinkal.GenerateProofRemotely()
 	batchSize := proofBatchSize(generateProofRemotely)
@@ -197,45 +96,15 @@ func hinkalSolanaWithdrawBatch(
 					return err
 				}
 				withdrawInputUtxos := []*utxo.Utxo{item.utxo, zeroUtxo}
-				withdrawOutputUtxos := []*utxo.Utxo{zeroUtxo}
-				randSeed, err := utils.RandomBigInt(31)
-				if err != nil {
-					return err
-				}
-				extraRandomization, err := cryptokeys.FindCorrectRandomization(randSeed, shieldedPrivateKey)
-				if err != nil {
-					return err
-				}
-				encryptedOutputBytes, encryptedOutputInts, err := solanaEncryptedOutputBytes(withdrawOutputUtxos)
-				if err != nil {
-					return err
-				}
-				inputUtxosArray := [][]*utxo.Utxo{withdrawInputUtxos}
-				outputUtxosArray := [][]*utxo.Utxo{withdrawOutputUtxos}
-				dimensions := types.DimDataType{
-					TokenNumber:     1,
-					NullifierAmount: len(withdrawInputUtxos),
-					OutputAmount:    len(withdrawOutputUtxos),
-				}
 				finalFeeStructure := fees.CalculateModifiedFeeStructure(groupCtx, chainID, token, recipientAmounts[absoluteIndex], feeStructure)
-				proof, err := snarkjs.ConstructSolanaZkProof(groupCtx, snarkjs.ConstructSolanaZkProofParams{
-					GenerateProofRemotely: generateProofRemotely,
-					MerkleTree:            hinkal.MerkleTree(chainID),
-					UserKeys:              hinkal.GetUserKeys(),
-					MintAddresses:         []string{mintAddress},
-					InputUtxos:            inputUtxosArray,
-					OutputUtxos:           outputUtxosArray,
-					ExtraRandomization:    extraRandomization,
-					RelayerFee:            finalFeeStructure.FlatFee,
-					VariableRate:          finalFeeStructure.VariableRate,
-					RecipientAddress:      item.recipientAddress,
-					SignerAddress:         relay,
-					Dimensions:            dimensions,
-					EncryptedOutputs:      encryptedOutputBytes,
-					ChainID:               chainID,
-				})
-				if err != nil {
-					return err
+
+				var speculative *types.SpeculativeTreeParams
+				if pendingLeaves != nil {
+					speculativeInputs, err := pretransaction.ToSpeculativeUtxos([][]*utxo.Utxo{{item.utxo}})
+					if err != nil {
+						return err
+					}
+					speculative = &types.SpeculativeTreeParams{PendingLeaves: pendingLeaves, InputUtxos: speculativeInputs}
 				}
 
 				accounts := api.SolanaTransactAccounts{Recipient: item.recipientAddress}
@@ -250,51 +119,72 @@ func hinkalSolanaWithdrawBatch(
 					ethereumAddress,
 					nil,
 				)
-				batchTransactions[batchIndex] = api.SolanaTransactionBody{
+
+				result, err := SolanaTransact(groupCtx, hinkal, HinkalSolanaTransactParams{
 					ChainID:         chainID,
+					MintAddresses:   []string{mintAddress},
+					AmountChanges:   []*big.Int{new(big.Int).Neg(item.utxo.Amount)},
 					RelayAddress:    relay,
+					Recipient:       item.recipientAddress,
+					Signer:          relay,
 					FunctionName:    "transact",
-					RecipientAmount: recipientAmounts[absoluteIndex].String(),
-					Args: api.SolanaArgs{
-						ProofAArr:        proof.ProofAArr,
-						ProofBArr:        proof.ProofBArr,
-						ProofCArr:        proof.ProofCArr,
-						PublicInputsArr:  proof.PublicInputsArr,
-						EncryptedOutputs: encryptedOutputInts,
-						RelayerFee:       finalFeeStructure.FlatFee.String(),
-						Dimensions:       dimensions,
-					},
+					Accounts:        accounts,
+					RelayerFee:      finalFeeStructure.FlatFee,
+					VariableRate:    finalFeeStructure.VariableRate,
+					UseBlockedUtxos: true,
+					InputUtxos:      [][]*utxo.Utxo{withdrawInputUtxos},
+					Speculative:     speculative,
+					Submit:          SolanaTransactSubmit{Mode: SolanaSubmitModeProofOnly},
+				})
+				if err != nil {
+					return err
+				}
+
+				batchTransactions[batchIndex] = api.SolanaTransactionBody{
+					ChainID:                  chainID,
+					RelayAddress:             relay,
+					FunctionName:             "transact",
+					RecipientAmount:          recipientAmounts[absoluteIndex].String(),
+					Args:                     result.Proof.Args,
 					Accounts:                 accounts,
-					CommitmentValidationData: proof.CommitmentValidationData,
+					CommitmentValidationData: result.Proof.CommitmentValidationData,
 					AdminData:                adminData,
 				}
 				return nil
 			})
 		}
 		if err := group.Wait(); err != nil {
-			return "", err
+			return nil, err
 		}
 		transactions = append(transactions, batchTransactions...)
 	}
 
-	api.SafeUpdateDepositAndWithdrawStatus(ctx, api.UpdateDepositAndWithdrawStatusRequestBody{
-		ID:                    statusID,
-		ChainID:               chainID,
-		HashedEthereumAddress: hashedEthereumAddress,
-		Phase:                 types.DepositAndWithdrawPhaseBeforeScheduleWithdraw,
-	})
-	scheduleID, err := web3.SolanaTransactCallRelayerBatch(ctx, chainID, transactions, hashedEthereumAddress, txCompletionTime, "", "")
+	return transactions, nil
+}
+
+func HinkalSolanaWithdrawBatch(
+	ctx context.Context,
+	hinkal ihinkal.HinkalInternal,
+	chainID int,
+	token types.ERC20Token,
+	userDepositedUtxos []recipientUtxo,
+	feeStructure types.FeeStructure,
+	ethereumAddress string,
+	hashedEthereumAddress string,
+	recipientAmounts []*big.Int,
+	txCompletionTime *int,
+	pendingLeaves []string,
+	dependsOnTxHash string,
+) (string, error) {
+	transactions, err := solanaWithdrawBatchPrepare(
+		ctx, hinkal, chainID, token, userDepositedUtxos, feeStructure, ethereumAddress, recipientAmounts, pendingLeaves,
+	)
 	if err != nil {
 		return "", err
 	}
-	api.SafeUpdateDepositAndWithdrawStatus(ctx, api.UpdateDepositAndWithdrawStatusRequestBody{
-		ID:                    statusID,
-		ChainID:               chainID,
-		HashedEthereumAddress: hashedEthereumAddress,
-		Phase:                 types.DepositAndWithdrawPhaseAfterScheduleWithdraw,
-		ScheduleID:            scheduleID,
-	})
-	return scheduleID, nil
+	return web3.SolanaTransactCallRelayerBatch(
+		ctx, chainID, transactions, hashedEthereumAddress, txCompletionTime, "", "", dependsOnTxHash,
+	)
 }
 
 func HinkalSolanaDepositAndWithdraw(
@@ -318,48 +208,127 @@ func HinkalSolanaDepositAndWithdraw(
 	}
 
 	token := erc20Tokens[0]
+	mintAddress := token.Erc20TokenAddress
 	rawEthereumAddress, err := hinkal.GetEthereumAddressByChain(ctx, chainID)
 	if err != nil {
 		return types.DepositAndSendExtendedResult{}, err
 	}
 	hashedEthereumAddress := utils.HashEthereumAddress(rawEthereumAddress)
 	solanaParams := &api.SolanaGasEstimateParams{
-		MintTo:         token.Erc20TokenAddress,
+		MintTo:         mintAddress,
 		NullifierCount: 1,
 	}
-	feeStructure, err := resolveSolanaDepositAndWithdrawFeeStructure(ctx, chainID, token.Erc20TokenAddress, feeStructureOverride, solanaParams)
+	feeStructure, err := resolveSolanaDepositAndWithdrawFeeStructure(ctx, chainID, mintAddress, feeStructureOverride, solanaParams)
 	if err != nil {
 		return types.DepositAndSendExtendedResult{}, err
 	}
 
-	userDepositedUtxos, statusID, depositTxHash, err := hinkalSolanaMultiPaymentDeposit(
-		ctx,
-		hinkal,
-		chainID,
-		token,
-		recipientAmounts,
-		recipientAddresses,
-		feeStructure,
-		hashedEthereumAddress,
+	amounts := solanaDepositAndWithdrawUtxoAmounts(recipientAmounts, feeStructure)
+	structures, err := getProoflessStealthAddressStructures(hinkal, len(amounts), nil)
+	if err != nil {
+		return types.DepositAndSendExtendedResult{}, err
+	}
+	if err := validateSolanaDepositArgs(amounts, structures); err != nil {
+		return types.DepositAndSendExtendedResult{}, err
+	}
+
+	timeStampSeconds := utils.GetCurrentTimeInSeconds()
+	timeStamp := strconv.FormatInt(timeStampSeconds, 10)
+
+	formattedMint, err := solanautils.FormatMintAddress(mintAddress)
+	if err != nil {
+		return types.DepositAndSendExtendedResult{}, err
+	}
+	nullifyingKey, err := hinkal.GetUserKeys().GetShieldedPrivateKey()
+	if err != nil {
+		return types.DepositAndSendExtendedResult{}, err
+	}
+
+	depositedUtxos := make([]recipientUtxo, len(structures))
+	pendingLeaves := make([]string, len(structures))
+	for i, structure := range structures {
+		note, err := utxo.NewUtxo(types.UtxoParams{
+			Amount:            amounts[i],
+			TimeStamp:         timeStamp,
+			NullifyingKey:     nullifyingKey,
+			MintAddress:       mintAddress,
+			Erc20TokenAddress: formattedMint.CompressedAddress,
+			StealthAddress:    utils.ToBeHex(structure.StealthAddress),
+			H0:                &types.JubPoint{structure.H0x, structure.H0y},
+		})
+		if err != nil {
+			return types.DepositAndSendExtendedResult{}, err
+		}
+		commitment, err := note.GetCommitment()
+		if err != nil {
+			return types.DepositAndSendExtendedResult{}, err
+		}
+		commitmentBig, err := utils.ParseBigInt(commitment)
+		if err != nil {
+			return types.DepositAndSendExtendedResult{}, err
+		}
+		depositedUtxos[i] = recipientUtxo{recipientAddress: recipientAddresses[i], utxo: note}
+		pendingLeaves[i] = commitmentBig.String()
+	}
+
+	programID, err := solana.PublicKeyFromBase58(hinkal.HinkalAddress(chainID))
+	if err != nil {
+		return types.DepositAndSendExtendedResult{}, err
+	}
+	originalDeployerStr, err := constants.OriginalDeployer(chainID)
+	if err != nil {
+		return types.DepositAndSendExtendedResult{}, err
+	}
+	originalDeployer, err := solana.PublicKeyFromBase58(originalDeployerStr)
+	if err != nil {
+		return types.DepositAndSendExtendedResult{}, err
+	}
+	signer, err := hinkal.GetSolanaPublicKey(ctx)
+	if err != nil {
+		return types.DepositAndSendExtendedResult{}, err
+	}
+	connection, err := hinkal.GetSolanaConnection()
+	if err != nil {
+		return types.DepositAndSendExtendedResult{}, err
+	}
+	ownEncryptionKeys, err := getOwnRecipientEncryptionKeys(hinkal, len(structures))
+	if err != nil {
+		return types.DepositAndSendExtendedResult{}, err
+	}
+	encryptedBlobs, err := buildSolanaDepositEncryptedBlobs(structures, ownEncryptionKeys)
+	if err != nil {
+		return types.DepositAndSendExtendedResult{}, err
+	}
+	depositInstruction, err := buildMultiPaymentDepositInstruction(
+		ctx, connection, programID, signer, originalDeployer, mintAddress, amounts, structures, encryptedBlobs, true, &timeStampSeconds,
 	)
 	if err != nil {
 		return types.DepositAndSendExtendedResult{}, err
 	}
-	if err := waitForDepositedUtxosInMerkleTree(ctx, hinkal, chainID, userDepositedUtxos); err != nil {
+
+	var depositTxHash string
+	var batchTransactions []api.SolanaTransactionBody
+	// Plain errgroup, not WithContext: a failing proof must not cancel a deposit already in flight.
+	var group errgroup.Group
+	group.Go(func() error {
+		var err error
+		depositTxHash, err = sendSolanaInstructions(ctx, hinkal, programID, connection, signer, []solana.Instruction{depositInstruction})
+		return err
+	})
+	group.Go(func() error {
+		var err error
+		batchTransactions, err = solanaWithdrawBatchPrepare(
+			ctx, hinkal, chainID, token, depositedUtxos, feeStructure,
+			rawEthereumAddress, recipientAmounts, pendingLeaves,
+		)
+		return err
+	})
+	if err := group.Wait(); err != nil {
 		return types.DepositAndSendExtendedResult{}, err
 	}
-	scheduleID, err := hinkalSolanaWithdrawBatch(
-		ctx,
-		hinkal,
-		chainID,
-		token,
-		userDepositedUtxos,
-		feeStructure,
-		rawEthereumAddress,
-		hashedEthereumAddress,
-		recipientAmounts,
-		statusID,
-		txCompletionTime,
+
+	scheduleID, err := web3.SolanaTransactCallRelayerBatch(
+		ctx, chainID, batchTransactions, hashedEthereumAddress, txCompletionTime, "", "", depositTxHash,
 	)
 	if err != nil {
 		return types.DepositAndSendExtendedResult{}, err

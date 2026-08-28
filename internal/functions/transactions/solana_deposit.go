@@ -3,15 +3,20 @@ package transactions
 import (
 	"context"
 	"encoding/base64"
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"log"
+	"math"
 	"math/big"
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	bin "github.com/gagliardetto/binary"
 	solana "github.com/gagliardetto/solana-go"
 	associatedtokenaccount "github.com/gagliardetto/solana-go/programs/associated-token-account"
+	computebudget "github.com/gagliardetto/solana-go/programs/compute-budget"
 	"github.com/gagliardetto/solana-go/programs/system"
 	tokenprogram "github.com/gagliardetto/solana-go/programs/token"
 	token2022 "github.com/gagliardetto/solana-go/programs/token-2022"
@@ -20,6 +25,7 @@ import (
 	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
 	cryptokeys "github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/crypto-keys"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/hinkal/ihinkal"
+	hinkalsolana "github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/solana"
 	errorhandling "github.com/Hinkal-Protocol/hinkal-go/internal/error-handling"
 	pretransaction "github.com/Hinkal-Protocol/hinkal-go/internal/functions/pre-transaction"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/snarkjs"
@@ -31,6 +37,7 @@ import (
 type multiPaymentDepositArgs struct {
 	Amounts                  []uint64
 	StealthAddressStructures []web3.AnchorStealthAddressStructure
+	EncryptedBlobs           [][]byte
 	CreateBlockedUtxos       bool
 }
 
@@ -42,7 +49,7 @@ var (
 	errNotSolanaChain                  = errors.New("transactions: Solana deposit requires a Solana chain")
 	errSolanaProoflessDepositNonSolana = errors.New("hinkalSolanaProoflessDepositHash: non-Solana chain")
 	errSolanaProoflessOneMint          = errors.New("Solana prooflessDeposit supports one mint per transaction")
-	multiPaymentDepositDiscrim         = []byte{70, 64, 60, 132, 3, 67, 69, 74}
+	multiPaymentDepositAtDiscrim       = []byte{20, 97, 177, 53, 252, 2, 24, 176}
 )
 
 const solanaBlockheightExpiredRetryCount = 10
@@ -62,10 +69,13 @@ func validateSolanaDepositArgs(amounts []*big.Int, structures []types.StealthAdd
 	return assertNoDuplicateStealthAddressStructures(structures)
 }
 
-func encodeMultiPaymentDepositData(amounts []*big.Int, structures []types.StealthAddressStructure, createBlockedUtxos bool) ([]byte, error) {
+// The instruction is always multi_payment_deposit_at; timestampOverride nil encodes Anchor's
+// Option::None, which makes the program fall back to the block clock.
+func encodeMultiPaymentDepositData(amounts []*big.Int, structures []types.StealthAddressStructure, encryptedBlobs [][]byte, createBlockedUtxos bool, timestampOverride *int64) ([]byte, error) {
 	args := multiPaymentDepositArgs{
 		Amounts:                  make([]uint64, len(amounts)),
 		StealthAddressStructures: make([]web3.AnchorStealthAddressStructure, len(structures)),
+		EncryptedBlobs:           encryptedBlobs,
 		CreateBlockedUtxos:       createBlockedUtxos,
 	}
 	for i, amount := range amounts {
@@ -79,15 +89,73 @@ func encodeMultiPaymentDepositData(amounts []*big.Int, structures []types.Stealt
 	if err != nil {
 		return nil, err
 	}
-	return append(append([]byte{}, multiPaymentDepositDiscrim...), body...), nil
+	data := append(append([]byte{}, multiPaymentDepositAtDiscrim...), body...)
+	if timestampOverride == nil {
+		return append(data, 0), nil
+	}
+	data = append(data, 1)
+	return binary.LittleEndian.AppendUint64(data, uint64(*timestampOverride)), nil
+}
+
+func resolveSolanaRootBuckets(
+	ctx context.Context,
+	connection *rpc.Client,
+	programID, merkleAccount solana.PublicKey,
+	insertCount int,
+) (*solana.AccountMeta, *solana.AccountMeta, error) {
+	info, err := connection.GetAccountInfo(ctx, merkleAccount)
+	if err != nil {
+		return nil, nil, err
+	}
+	if info == nil || info.Value == nil {
+		return nil, nil, errors.New("transactions: merkle account not found")
+	}
+	mIndex, err := hinkalsolana.ParseMerkleMIndex(info.Value.Data.GetBinary())
+	if err != nil {
+		return nil, nil, err
+	}
+	relative := new(big.Int).Sub(mIndex, hinkalsolana.MerkleMinimumIndex())
+	bucketIndex := hinkalsolana.RootBucketIndex(relative)
+
+	current, err := web3.GetRootBucketPublicKey(programID, merkleAccount, bucketIndex)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	slot := hinkalsolana.RootBucketSlot(relative)
+	straddles := new(big.Int).Add(slot, big.NewInt(int64(insertCount))).Cmp(big.NewInt(hinkalsolana.RootBucketCap)) > 0
+	if !straddles {
+		return solana.NewAccountMeta(current, true, false), solana.NewAccountMeta(programID, false, false), nil
+	}
+	next, err := web3.GetRootBucketPublicKey(programID, merkleAccount, new(big.Int).Add(bucketIndex, big.NewInt(1)))
+	if err != nil {
+		return nil, nil, err
+	}
+	return solana.NewAccountMeta(current, true, false), solana.NewAccountMeta(next, true, false), nil
+}
+
+func buildSolanaDepositEncryptedBlobs(structures []types.StealthAddressStructure, recipientEncryptionKeys []string) ([][]byte, error) {
+	outputs, err := buildProoflessEncryptedOutputs(structures, recipientEncryptionKeys)
+	if err != nil {
+		return nil, err
+	}
+	blobs := make([][]byte, len(outputs))
+	for i, out := range outputs {
+		blobs[i] = common.FromHex(out)
+	}
+	return blobs, nil
 }
 
 func buildMultiPaymentDepositInstruction(
+	ctx context.Context,
+	connection *rpc.Client,
 	programID, signer, originalDeployer solana.PublicKey,
 	mintAddress string,
 	amounts []*big.Int,
 	structures []types.StealthAddressStructure,
+	encryptedBlobs [][]byte,
 	createBlockedUtxos bool,
+	timestampOverride *int64,
 ) (*solana.GenericInstruction, error) {
 	storageAccount, err := web3.GetStorageAccountPublicKey(programID, originalDeployer)
 	if err != nil {
@@ -124,6 +192,11 @@ func buildMultiPaymentDepositInstruction(
 		storageVaultAtaMeta = solana.NewAccountMeta(storageVaultAta, true, false)
 	}
 
+	rootBucketCurrent, rootBucketNext, err := resolveSolanaRootBuckets(ctx, connection, programID, merkleAccount, len(amounts))
+	if err != nil {
+		return nil, err
+	}
+
 	accounts := solana.AccountMetaSlice{
 		solana.NewAccountMeta(signer, true, true),
 		solana.NewAccountMeta(originalDeployer, false, false),
@@ -133,12 +206,14 @@ func buildMultiPaymentDepositInstruction(
 		signerAtaMeta,
 		storageVaultAtaMeta,
 		solana.NewAccountMeta(merkleAccount, true, false),
+		rootBucketCurrent,
+		rootBucketNext,
 		solana.NewAccountMeta(solana.TokenProgramID, false, false),
 		solana.NewAccountMeta(solana.SPLAssociatedTokenAccountProgramID, false, false),
 		solana.NewAccountMeta(solana.SystemProgramID, false, false),
 	}
 
-	data, err := encodeMultiPaymentDepositData(amounts, structures, createBlockedUtxos)
+	data, err := encodeMultiPaymentDepositData(amounts, structures, encryptedBlobs, createBlockedUtxos, timestampOverride)
 	if err != nil {
 		return nil, err
 	}
@@ -215,6 +290,54 @@ func buildSolanaTransferInstructions(
 	return instructions, nil
 }
 
+const (
+	maxComputeUnitLimit       = 1_400_000
+	minComputeUnitLimit       = 200_000
+	computeUnitPaddingPercent = 0.2
+)
+
+// Simulate at the ceiling, then reserve what was actually consumed plus padding. Any failure
+// falls back to the ceiling, which is what the transaction would have asked for anyway.
+func estimateSolanaComputeUnitLimit(
+	ctx context.Context,
+	connection *rpc.Client,
+	payer solana.PublicKey,
+	instructions []solana.Instruction,
+) uint32 {
+	latest, err := connection.GetLatestBlockhash(ctx, rpc.CommitmentConfirmed)
+	if err != nil {
+		return maxComputeUnitLimit
+	}
+	tx, err := solana.NewTransaction(withComputeUnitLimit(instructions, maxComputeUnitLimit), latest.Value.Blockhash, solana.TransactionPayer(payer))
+	if err != nil {
+		return maxComputeUnitLimit
+	}
+	simulation, err := connection.SimulateTransactionWithOpts(ctx, tx, &rpc.SimulateTransactionOpts{
+		ReplaceRecentBlockhash: true,
+		Commitment:             rpc.CommitmentConfirmed,
+	})
+	if err != nil || simulation == nil || simulation.Value == nil {
+		return maxComputeUnitLimit
+	}
+	if simulation.Value.Err != nil {
+		log.Printf("solana compute-unit simulation failed: %v", simulation.Value.Err)
+	}
+	if simulation.Value.UnitsConsumed == nil || *simulation.Value.UnitsConsumed == 0 {
+		return maxComputeUnitLimit
+	}
+	padded := uint64(math.Ceil(float64(*simulation.Value.UnitsConsumed) * (1 + computeUnitPaddingPercent)))
+	return uint32(max(minComputeUnitLimit, min(padded, maxComputeUnitLimit)))
+}
+
+func withComputeUnitLimit(instructions []solana.Instruction, limit uint32) []solana.Instruction {
+	budget := []solana.Instruction{computebudget.NewSetComputeUnitLimitInstruction(limit).Build()}
+	return append(budget, instructions...)
+}
+
+func withSolanaComputeBudget(ctx context.Context, connection *rpc.Client, payer solana.PublicKey, instructions []solana.Instruction) []solana.Instruction {
+	return withComputeUnitLimit(instructions, estimateSolanaComputeUnitLimit(ctx, connection, payer, instructions))
+}
+
 func buildSolanaDepositTransaction(
 	ctx context.Context,
 	connection *rpc.Client,
@@ -226,7 +349,7 @@ func buildSolanaDepositTransaction(
 		return nil, err
 	}
 	return solana.NewTransaction(
-		instructions,
+		withSolanaComputeBudget(ctx, connection, signer, instructions),
 		latest.Value.Blockhash,
 		solana.TransactionPayer(signer),
 	)
@@ -291,7 +414,7 @@ func signAndSendSolanaInstructions(
 		if err != nil {
 			return "", err
 		}
-		tx, err := solana.NewTransaction(instructions, latest.Value.Blockhash, solana.TransactionPayer(signer))
+		tx, err := solana.NewTransaction(withSolanaComputeBudget(ctx, connection, signer, instructions), latest.Value.Blockhash, solana.TransactionPayer(signer))
 		if err != nil {
 			return "", err
 		}
@@ -313,12 +436,42 @@ func signAndSendSolanaInstructions(
 	return "", errors.New("transactions: Solana deposit failed")
 }
 
+// sendSolanaInstructions signs and broadcasts without waiting for confirmation, so a dependent
+// proof can be built while the transaction is still landing.
+func sendSolanaInstructions(
+	ctx context.Context,
+	hinkal ihinkal.HinkalInternal,
+	programID solana.PublicKey,
+	connection *rpc.Client,
+	signer solana.PublicKey,
+	instructions []solana.Instruction,
+) (string, error) {
+	program, err := hinkal.GetSolanaProgram(programID)
+	if err != nil {
+		return "", err
+	}
+	latest, err := connection.GetLatestBlockhash(ctx, rpc.CommitmentConfirmed)
+	if err != nil {
+		return "", err
+	}
+	tx, err := solana.NewTransaction(withSolanaComputeBudget(ctx, connection, signer, instructions), latest.Value.Blockhash, solana.TransactionPayer(signer))
+	if err != nil {
+		return "", err
+	}
+	signature, err := program.SignAndSend(ctx, tx)
+	if err != nil {
+		return "", err
+	}
+	return signature.String(), nil
+}
+
 func SubmitSolanaProoflessDeposit(
 	ctx context.Context,
 	hinkal ihinkal.HinkalInternal,
 	token types.ERC20Token,
 	amounts []*big.Int,
 	structures []types.StealthAddressStructure,
+	recipientEncryptionKeys []string,
 	returnTxData bool,
 ) (string, error) {
 	if err := validateSolanaDepositArgs(amounts, structures); err != nil {
@@ -353,7 +506,12 @@ func SubmitSolanaProoflessDeposit(
 		return "", err
 	}
 
-	instruction, err := buildMultiPaymentDepositInstruction(programID, signer, originalDeployer, token.Erc20TokenAddress, amounts, structures, false)
+	encryptedBlobs, err := buildSolanaDepositEncryptedBlobs(structures, recipientEncryptionKeys)
+	if err != nil {
+		return "", err
+	}
+
+	instruction, err := buildMultiPaymentDepositInstruction(ctx, connection, programID, signer, originalDeployer, token.Erc20TokenAddress, amounts, structures, encryptedBlobs, false, nil)
 	if err != nil {
 		return "", err
 	}
@@ -379,6 +537,7 @@ func HinkalSolanaProoflessDepositWithPublicFee(
 	token types.ERC20Token,
 	amounts []*big.Int,
 	structures []types.StealthAddressStructure,
+	recipientEncryptionKeys []string,
 	feeAmount *big.Int,
 ) (string, error) {
 	if err := validateSolanaDepositArgs(amounts, structures); err != nil {
@@ -428,7 +587,12 @@ func HinkalSolanaProoflessDepositWithPublicFee(
 	if err != nil {
 		return "", err
 	}
-	depositInstruction, err := buildMultiPaymentDepositInstruction(programID, signer, originalDeployer, token.Erc20TokenAddress, amounts, structures, false)
+	encryptedBlobs, err := buildSolanaDepositEncryptedBlobs(structures, recipientEncryptionKeys)
+	if err != nil {
+		return "", err
+	}
+
+	depositInstruction, err := buildMultiPaymentDepositInstruction(ctx, connection, programID, signer, originalDeployer, token.Erc20TokenAddress, amounts, structures, encryptedBlobs, false, nil)
 	if err != nil {
 		return "", err
 	}
@@ -449,6 +613,7 @@ func HinkalSolanaProoflessDeposit(
 	erc20Tokens []types.ERC20Token,
 	amountChanges []*big.Int,
 	stealthAddressStructuresOverride []types.StealthAddressStructure,
+	recipientEncryptionKeysOverride []string,
 	returnTxData bool,
 ) (string, error) {
 	chainID, err := pretransaction.ValidateAndGetChainID(erc20Tokens)
@@ -469,12 +634,26 @@ func HinkalSolanaProoflessDeposit(
 		}
 	}
 
+	if stealthAddressStructuresOverride != nil && recipientEncryptionKeysOverride == nil {
+		return "", errRecipientEncryptionKeysRequired
+	}
+	if recipientEncryptionKeysOverride != nil && len(recipientEncryptionKeysOverride) != len(amountChanges) {
+		return "", errRecipientEncryptionKeysLengthMismatch
+	}
+
 	stealthAddressStructures, err := getProoflessStealthAddressStructures(hinkal, len(amountChanges), stealthAddressStructuresOverride)
 	if err != nil {
 		return "", err
 	}
+	recipientEncryptionKeys := recipientEncryptionKeysOverride
+	if recipientEncryptionKeys == nil {
+		recipientEncryptionKeys, err = getOwnRecipientEncryptionKeys(hinkal, len(amountChanges))
+		if err != nil {
+			return "", err
+		}
+	}
 
-	result, err := SubmitSolanaProoflessDeposit(ctx, hinkal, firstToken, amountChanges, stealthAddressStructures, returnTxData)
+	result, err := SubmitSolanaProoflessDeposit(ctx, hinkal, firstToken, amountChanges, stealthAddressStructures, recipientEncryptionKeys, returnTxData)
 	if err != nil {
 		return "", err
 	}
@@ -513,7 +692,11 @@ func HinkalSolanaDeposit(
 	if err != nil {
 		return "", err
 	}
-	return SubmitSolanaProoflessDeposit(ctx, hinkal, token, []*big.Int{amount}, []types.StealthAddressStructure{structure}, returnTxData)
+	ownKeys, err := getOwnRecipientEncryptionKeys(hinkal, 1)
+	if err != nil {
+		return "", err
+	}
+	return SubmitSolanaProoflessDeposit(ctx, hinkal, token, []*big.Int{amount}, []types.StealthAddressStructure{structure}, ownKeys, returnTxData)
 }
 
 func HinkalSolanaDepositForOther(
@@ -531,7 +714,11 @@ func HinkalSolanaDepositForOther(
 	if err != nil {
 		return "", err
 	}
-	result, err := SubmitSolanaProoflessDeposit(ctx, hinkal, token, []*big.Int{amount}, []types.StealthAddressStructure{structure}, returnTxData)
+	encryptionKey, err := pretransaction.GetEncryptionKeyFromRecipientInfo(recipientInfo)
+	if err != nil {
+		return "", err
+	}
+	result, err := SubmitSolanaProoflessDeposit(ctx, hinkal, token, []*big.Int{amount}, []types.StealthAddressStructure{structure}, []string{encryptionKey}, returnTxData)
 	if err != nil {
 		return "", err
 	}

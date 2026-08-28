@@ -15,8 +15,9 @@ type Client struct {
 	client *http.Client
 }
 
-func NewClient(url string) *Client {
-	return &Client{url: url, client: &http.Client{}}
+// NewClientWithHTTPClient builds a Client using a caller-supplied *http.Client.
+func NewClientWithHTTPClient(url string, httpClient *http.Client) *Client {
+	return &Client{url: url, client: httpClient}
 }
 
 type rpcRequest struct {
@@ -70,6 +71,10 @@ func (c *Client) GetSlot(ctx context.Context) (uint64, error) {
 	return slot, err
 }
 
+// ErrAccountNotFound separates "this PDA was never created" from an RPC failure, so callers
+// can fall back to a zero value without swallowing a transport error.
+var ErrAccountNotFound = errors.New("account not found")
+
 func (c *Client) GetAccountInfo(ctx context.Context, address string) ([]byte, error) {
 	var result struct {
 		Value *struct {
@@ -81,7 +86,7 @@ func (c *Client) GetAccountInfo(ctx context.Context, address string) ([]byte, er
 		return nil, err
 	}
 	if result.Value == nil {
-		return nil, fmt.Errorf("getAccountInfo: account %s not found", address)
+		return nil, fmt.Errorf("getAccountInfo: account %s: %w", address, ErrAccountNotFound)
 	}
 	if len(result.Value.Data) == 0 {
 		return nil, fmt.Errorf("getAccountInfo: account %s has no data", address)

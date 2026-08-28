@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Hinkal-Protocol/hinkal-go/internal/api"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
 	solanadata "github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/solana"
 )
@@ -12,11 +13,11 @@ import (
 const transactionFetchRetryCount = 30
 
 func FetchTransactionWithRetry(ctx context.Context, chainID int, signature string) (*solanadata.Transaction, error) {
-	rpcURL, err := constants.FetchRPCURL(chainID)
+	rpcURL, err := constants.RPCURL(chainID)
 	if err != nil {
 		return nil, err
 	}
-	client := solanadata.NewClient(rpcURL)
+	client := api.NewSolanaClientWithFallback(rpcURL)
 	for attempt := 0; attempt < transactionFetchRetryCount; attempt++ {
 		tx, err := client.GetTransaction(ctx, signature)
 		if err == nil && tx != nil && tx.Meta != nil {

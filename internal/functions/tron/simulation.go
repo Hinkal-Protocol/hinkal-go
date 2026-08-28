@@ -25,7 +25,7 @@ type ethCallResponse struct {
 // ethCall runs eth_call against the Tron node JSON-RPC and returns the result hex, or an error if
 // the call reverts. from/to are 0x-hex addresses.
 func ethCall(ctx context.Context, chainID int, from, to string, data []byte, value *big.Int) (string, error) {
-	rpcURL, err := constants.FetchRPCURL(chainID)
+	rpcURL, err := constants.TronJSONRPCURL(chainID)
 	if err != nil {
 		return "", err
 	}

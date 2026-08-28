@@ -6,20 +6,14 @@ import (
 	"math/big"
 	"strconv"
 
-	"github.com/ethereum/go-ethereum/common"
 	solana "github.com/gagliardetto/solana-go"
 
 	"github.com/Hinkal-Protocol/hinkal-go/internal/api"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
-	cryptokeys "github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/crypto-keys"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/hinkal/ihinkal"
-	"github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/utxo"
 	errorhandling "github.com/Hinkal-Protocol/hinkal-go/internal/error-handling"
-	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/balance"
 	pretransaction "github.com/Hinkal-Protocol/hinkal-go/internal/functions/pre-transaction"
-	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/snarkjs"
 	solanautils "github.com/Hinkal-Protocol/hinkal-go/internal/functions/solana"
-	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/utils"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/web3"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/types"
 )
@@ -36,53 +30,10 @@ func solanaSwapSlippagePercent(hinkal ihinkal.HinkalInternal) float64 {
 	return value
 }
 
-var errSolanaSwapTwoTokens = errors.New("transactions: Solana swap requires exactly two tokens")
-
-func getSolanaSwapInputAndOutputUtxos(
-	ctx context.Context,
-	hinkal ihinkal.HinkalInternal,
-	chainID int,
-	mintAddresses []string,
-	amountChanges []*big.Int,
-) ([][]*utxo.Utxo, [][]*utxo.Utxo, error) {
-	inputUtxosArray, err := balance.AddPaddingToUtxos(ctx, hinkal, chainID, mintAddresses, amountChanges, 6, false, false)
-	if err != nil {
-		return nil, nil, err
-	}
-	userKeys := hinkal.GetUserKeys()
-	timeStamp := new(big.Int).SetInt64(utils.GetCurrentTimeInSeconds()).String()
-	outputUtxosArray := make([][]*utxo.Utxo, len(mintAddresses))
-	for i := range mintAddresses {
-		outputUtxos, err := pretransaction.OutputUtxoProcessing(userKeys, inputUtxosArray[i], amountChanges[i], timeStamp, true, "", nil)
-		if err != nil {
-			return nil, nil, err
-		}
-		outputUtxosArray[i] = []*utxo.Utxo{outputUtxos[0]}
-	}
-	return inputUtxosArray, outputUtxosArray, nil
-}
-
-func solanaSwapEncryptedOutputs(outputUtxosArray [][]*utxo.Utxo) ([][]byte, [][]int, error) {
-	encryptedOutputs, err := snarkjs.CalcEncryptedOutputs(outputUtxosArray)
-	if err != nil {
-		return nil, nil, err
-	}
-	bytesArr := make([][]byte, len(encryptedOutputs))
-	intsArr := make([][]int, len(encryptedOutputs))
-	for i, tokenOutputs := range encryptedOutputs {
-		if len(tokenOutputs) == 0 {
-			return nil, nil, errSolanaWithdrawMissingOutput
-		}
-		row := common.FromHex(tokenOutputs[0])
-		bytesArr[i] = row
-		ints := make([]int, len(row))
-		for j, b := range row {
-			ints[j] = int(b)
-		}
-		intsArr[i] = ints
-	}
-	return bytesArr, intsArr, nil
-}
+var (
+	errSolanaSwapTwoTokens        = errors.New("transactions: Solana swap requires exactly two tokens")
+	errSolanaSwapFeeTokenMismatch = errors.New("solana swap fee token must match the output token")
+)
 
 func HinkalSolanaSwap(
 	ctx context.Context,
@@ -126,6 +77,9 @@ func HinkalSolanaSwap(
 
 	amountChanges := copyBigInts(amountChangesBase)
 	mintAddresses := tokenAddresses(erc20Tokens)
+	if feeToken != "" && feeToken != mintAddresses[1] {
+		return "", errSolanaSwapFeeTokenMismatch
+	}
 	if feeToken == "" {
 		feeToken = mintAddresses[1]
 	}
@@ -170,66 +124,11 @@ func HinkalSolanaSwap(
 	if err != nil {
 		return "", err
 	}
-	inputUtxosArray, outputUtxosArray, err := getSolanaSwapInputAndOutputUtxos(ctx, hinkal, chainID, mintAddresses, amountChanges)
-	if err != nil {
-		return "", err
-	}
-
-	shieldedPrivateKey, err := hinkal.GetUserKeys().GetShieldedPrivateKey()
-	if err != nil {
-		return "", err
-	}
-	randSeed, err := utils.RandomBigInt(31)
-	if err != nil {
-		return "", err
-	}
-	extraRandomization, err := cryptokeys.FindCorrectRandomization(randSeed, shieldedPrivateKey)
-	if err != nil {
-		return "", err
-	}
-
-	encryptedOutputBytes, encryptedOutputInts, err := solanaSwapEncryptedOutputs(outputUtxosArray)
-	if err != nil {
-		return "", err
-	}
-
 	swapperAccount, err := web3.GetSwapperAccountPublicKeyFromSalt(hinkalProgramAddress, originalDeployer, swapperAccountSalt)
 	if err != nil {
 		return "", err
 	}
 	hinkalInstructions, remainingAccounts, err := pretransaction.ConvertOKXToHinkalInstructions(instructionLists, swapperAccount)
-	if err != nil {
-		return "", err
-	}
-
-	if err := pretransaction.EnsureAmountChanges(inputUtxosArray, outputUtxosArray, amountChanges); err != nil {
-		return "", err
-	}
-
-	dimensions := types.DimDataType{
-		TokenNumber:     2,
-		NullifierAmount: len(inputUtxosArray[0]),
-		OutputAmount:    1,
-	}
-	proof, err := snarkjs.ConstructSolanaZkProof(ctx, snarkjs.ConstructSolanaZkProofParams{
-		GenerateProofRemotely: hinkal.GenerateProofRemotely(),
-		MerkleTree:            hinkal.MerkleTree(chainID),
-		UserKeys:              hinkal.GetUserKeys(),
-		MintAddresses:         mintAddresses,
-		InputUtxos:            inputUtxosArray,
-		OutputUtxos:           outputUtxosArray,
-		ExtraRandomization:    extraRandomization,
-		RelayerFee:            feeStructure.FlatFee,
-		VariableRate:          feeStructure.VariableRate,
-		RecipientAddress:      recipient.String(),
-		SignerAddress:         relay,
-		Dimensions:            dimensions,
-		EncryptedOutputs:      encryptedOutputBytes,
-		ChainID:               chainID,
-		Instructions:          hinkalInstructions,
-		RemainingAccounts:     remainingAccounts,
-		SwapperAccountSalt:    swapperAccountSalt,
-	})
 	if err != nil {
 		return "", err
 	}
@@ -254,36 +153,33 @@ func HinkalSolanaSwap(
 		AddressLookupTableAccount: addressLookupTableAccount,
 	}
 
-	variableRate := feeStructure.VariableRate.String()
-	args := api.SolanaSwapArgs{
-		SolanaArgs: api.SolanaArgs{
-			ProofAArr:        proof.ProofAArr,
-			ProofBArr:        proof.ProofBArr,
-			ProofCArr:        proof.ProofCArr,
-			PublicInputsArr:  proof.PublicInputsArr,
-			EncryptedOutputs: encryptedOutputInts,
-			RelayerFee:       feeStructure.FlatFee.String(),
-			VariableRate:     &variableRate,
-			Dimensions:       dimensions,
-		},
-		HinkalInstructions: hinkalInstructionsToAPI(hinkalInstructions),
-	}
-
 	ethereumAddress, err := hinkal.GetEthereumAddress(ctx)
 	if err != nil {
 		return "", err
 	}
 	adminData := pretransaction.ConstructAdminData(types.AdminPrivateSwap, chainID, mintAddresses, amountChanges, ethereumAddress, erc20Tokens)
 
-	return web3.SolanaTransactCallRelayer(ctx, api.SolanaTransactionBody{
-		ChainID:                  chainID,
-		RelayAddress:             relay,
-		FunctionName:             "swap",
-		Args:                     args,
-		Accounts:                 accounts,
-		CommitmentValidationData: proof.CommitmentValidationData,
-		AdminData:                adminData,
+	result, err := SolanaTransact(ctx, hinkal, HinkalSolanaTransactParams{
+		ChainID:            chainID,
+		MintAddresses:      mintAddresses,
+		AmountChanges:      amountChanges,
+		RelayAddress:       relay,
+		Recipient:          recipient.String(),
+		Signer:             relay,
+		FunctionName:       "swap",
+		Accounts:           accounts,
+		OnChainCreation:    []bool{false, true},
+		RelayerFee:         feeStructure.FlatFee,
+		VariableRate:       feeStructure.VariableRate,
+		SwapperAccountSalt: swapperAccountSalt,
+		HinkalInstructions: hinkalInstructions,
+		RemainingAccounts:  remainingAccounts,
+		Submit:             SolanaTransactSubmit{Mode: SolanaSubmitModeRelayer, AdminData: adminData},
 	})
+	if err != nil {
+		return "", err
+	}
+	return result.TxHash, nil
 }
 
 func nonNativeMint(mintAddress string) *string {

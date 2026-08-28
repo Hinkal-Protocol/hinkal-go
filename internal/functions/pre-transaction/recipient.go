@@ -79,6 +79,16 @@ func ConstructStealthAddressStructure(recipientInfo string) (types.StealthAddres
 	}, nil
 }
 
+// GetEncryptionKeyFromRecipientInfo pulls the 6th field out of a recipientInfo string
+// (stealthAddress,H0[0],H0[1],H1[0],H1[1],encryptionKey).
+func GetEncryptionKeyFromRecipientInfo(recipientInfo string) (string, error) {
+	parts := strings.Split(recipientInfo, ",")
+	if len(parts) < 6 || parts[5] == "" {
+		return "", fmt.Errorf("getEncryptionKeyFromRecipientInfo: recipient info %q is missing an encryption key", recipientInfo)
+	}
+	return parts[5], nil
+}
+
 func GetRecipientInfoFromUserKeys(userKeys *cryptokeys.UserKeys) (string, error) {
 	nullifyingKey, err := userKeys.GetShieldedPrivateKey()
 	if err != nil {

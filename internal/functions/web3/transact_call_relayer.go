@@ -62,6 +62,7 @@ func SolanaTransactCallRelayerBatch(
 	txCompletionTime *int,
 	ref string,
 	hashedDashboardAccountID string,
+	dependsOnTxHash string,
 ) (string, error) {
 	resp, err := api.CallRelayerSolanaTransactBatchAPI(ctx, api.SolanaTransactionBatchRequestBody{
 		ChainID:                  chainID,
@@ -70,6 +71,7 @@ func SolanaTransactCallRelayerBatch(
 		TxCompletionTime:         txCompletionTime,
 		Ref:                      ref,
 		HashedDashboardAccountID: hashedDashboardAccountID,
+		DependsOnTxHash:          dependsOnTxHash,
 	})
 	if err != nil {
 		return "", err
@@ -116,6 +118,7 @@ func TransactCallRelayerBatch(
 	txCompletionTime *int,
 	ref string,
 	hashedDashboardAccountID string,
+	dependsOnTxHash string,
 ) (string, error) {
 	if len(transactions) == 0 {
 		return "", fmt.Errorf("web3: batch transactions must not be empty")
@@ -144,6 +147,7 @@ func TransactCallRelayerBatch(
 		TxCompletionTime:         txCompletionTime,
 		Ref:                      ref,
 		HashedDashboardAccountID: hashedDashboardAccountID,
+		DependsOnTxHash:          dependsOnTxHash,
 	})
 	if err != nil {
 		return "", err

@@ -18,3 +18,15 @@ func EncodeUint256Array(values []*big.Int) (string, error) {
 	}
 	return "0x" + hex.EncodeToString(packed), nil
 }
+
+func EncodeUint256Array2D(values [][]*big.Int) (string, error) {
+	uint256Array2D, err := abi.NewType("uint256[][]", "", nil)
+	if err != nil {
+		return "", err
+	}
+	packed, err := (abi.Arguments{{Type: uint256Array2D}}).Pack(values)
+	if err != nil {
+		return "", err
+	}
+	return "0x" + hex.EncodeToString(packed), nil
+}

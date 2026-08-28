@@ -12,6 +12,7 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 
+	"github.com/Hinkal-Protocol/hinkal-go/internal/api"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/types"
 )
@@ -31,11 +32,11 @@ type EthersProviderAdapter struct {
 func NewEthersProviderAdapter() (*EthersProviderAdapter, error) {
 	a := &EthersProviderAdapter{fetchClients: make(map[int]*ethclient.Client)}
 	for _, chainID := range constants.EVMChainIDs {
-		rpcURL, err := constants.FetchRPCURL(chainID)
+		rpcURL, err := constants.RPCURL(chainID)
 		if err != nil {
 			return nil, err
 		}
-		client, err := ethclient.Dial(rpcURL)
+		client, err := api.DialEthClientWithFallback(chainID, rpcURL)
 		if err != nil {
 			return nil, fmt.Errorf("dial chain %d: %w", chainID, err)
 		}

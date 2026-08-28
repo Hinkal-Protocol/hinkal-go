@@ -200,7 +200,7 @@ func (h *Hinkal) InitUserKeysWithEnclaveSignature(ctx context.Context, mode type
 	if err != nil {
 		return err
 	}
-	storedSignature, err := h.StoreAndGetInitialSignature(ctx, signature, false, "")
+	storedSignature, err := h.StoreAndGetInitialSignature(ctx, signature)
 	if err != nil {
 		return err
 	}
@@ -214,8 +214,6 @@ func (h *Hinkal) InitUserKeysWithEnclaveSignature(ctx context.Context, mode type
 func (h *Hinkal) StoreAndGetInitialSignature(
 	ctx context.Context,
 	authSignature string,
-	isSolanaLedger bool,
-	txMessageForSolanaLedger string,
 ) (string, error) {
 	ethereumAddress, err := h.GetEthereumAddress(ctx)
 	if err != nil {
@@ -228,8 +226,6 @@ func (h *Hinkal) StoreAndGetInitialSignature(
 		ctx,
 		ethereumAddress,
 		authSignature,
-		isSolanaLedger,
-		txMessageForSolanaLedger,
 	)
 }
 

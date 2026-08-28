@@ -87,8 +87,8 @@ type (
 )
 
 var (
-	StoreUtxoInEnclave  = enclave.StoreUtxoInEnclave
-	GetUtxosFromEnclave = enclave.GetUtxosFromEnclave
+	StoreClaimableKeyInEnclave = enclave.StoreClaimableKeyInEnclave
+	GetUtxosFromEnclave        = enclave.GetUtxosFromEnclave
 )
 
 const (

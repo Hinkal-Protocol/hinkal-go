@@ -1,6 +1,7 @@
 package contractabi
 
 import (
+	"errors"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -211,6 +212,74 @@ func toABIDimensions(d types.DimDataType) abiDimensions {
 }
 
 // PackTransact ABI-encodes a call to the EVM Hinkal contract's transact method.
+
+var (
+	errTronNewRootHashRequired       = errors.New("contractabi: circomData.newRootHash is required for Tron transactions")
+	errTronInsertedLeafIndexRequired = errors.New("contractabi: circomData.insertedLeafIndex is required for Tron transactions")
+)
+
+// abiTronCircomData mirrors the Tron contract's circomData tuple, which differs from the EVM
+// one. Field order must match the ABI.
+type abiTronCircomData struct {
+	RootHashHinkal      *big.Int
+	RootHashHinkalIndex *big.Int
+	Erc20TokenAddresses []common.Address
+	AmountChanges       []*big.Int
+	NewRootHash         *big.Int
+	InputNullifiers     [][]*big.Int
+	OutCommitments      [][]*big.Int
+	EncryptedOutputs    [][][]byte
+	SlippageValues      []*big.Int
+	FeeStructure        abiFeeStructure
+	TimeStamp           *big.Int
+	CalldataHash        *big.Int
+	EmporiumMessage     *big.Int
+	PublicSignalCount   uint16
+	Relay               common.Address
+	ExternalActionData  abiExternalActionData
+	HookData            abiHookData
+	OriginalSender      common.Address
+	ExtraData           []byte
+	InsertedLeafIndex   *big.Int
+	CreateBlockedUtxos  bool
+}
+
+func tronCircomDataToABI(c types.CircomDataType) (abiTronCircomData, error) {
+	if c.NewRootHash == nil {
+		return abiTronCircomData{}, errTronNewRootHashRequired
+	}
+	if c.InsertedLeafIndex == nil {
+		return abiTronCircomData{}, errTronInsertedLeafIndexRequired
+	}
+	base, err := circomDataToABI(c)
+	if err != nil {
+		return abiTronCircomData{}, err
+	}
+	return abiTronCircomData{
+		RootHashHinkal:      base.RootHashHinkal,
+		RootHashHinkalIndex: base.RootHashHinkalIndex,
+		Erc20TokenAddresses: base.Erc20TokenAddresses,
+		AmountChanges:       base.AmountChanges,
+		NewRootHash:         c.NewRootHash,
+		InputNullifiers:     base.InputNullifiers,
+		OutCommitments:      base.OutCommitments,
+		EncryptedOutputs:    base.EncryptedOutputs,
+		SlippageValues:      base.SlippageValues,
+		FeeStructure:        base.FeeStructure,
+		TimeStamp:           base.TimeStamp,
+		CalldataHash:        base.CalldataHash,
+		EmporiumMessage:     base.EmporiumMessage,
+		PublicSignalCount:   base.PublicSignalCount,
+		Relay:               base.Relay,
+		ExternalActionData:  base.ExternalActionData,
+		HookData:            base.HookData,
+		OriginalSender:      base.OriginalSender,
+		ExtraData:           base.ExtraData,
+		InsertedLeafIndex:   c.InsertedLeafIndex,
+		CreateBlockedUtxos:  c.CreateBlockedUtxos,
+	}, nil
+}
+
 func PackTransact(chainID int, zkCallData types.NewZkCallDataType, dimData types.DimDataType, circomData types.CircomDataType) ([]byte, error) {
 	hinkalABI, err := Hinkal(chainID)
 	if err != nil {
@@ -245,7 +314,12 @@ func PackTronTransact(
 	if err != nil {
 		return nil, err
 	}
-	circom, err := circomDataToABI(circomData)
+	// The Tron verifier takes the G2 point coordinates in the opposite order from the EVM one.
+	b = [2][2]*big.Int{
+		{b[0][1], b[0][0]},
+		{b[1][1], b[1][0]},
+	}
+	circom, err := tronCircomDataToABI(circomData)
 	if err != nil {
 		return nil, err
 	}

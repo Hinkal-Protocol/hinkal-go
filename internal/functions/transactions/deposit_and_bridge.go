@@ -116,27 +116,15 @@ func resolveDepositAndBridgeFeeStructure(
 	return normalizeFeeStructure(feeStructure), nil
 }
 
-func zeroDepositFeeStructure(feeStructure types.FeeStructure) types.FeeStructure {
-	feeToken := feeStructure.FeeToken
-	if feeToken == "" {
-		feeToken = constants.DefaultFeeToken
-	}
-	return types.FeeStructure{
-		FeeToken:     feeToken,
-		FlatFee:      big.NewInt(0),
-		VariableRate: big.NewInt(0),
-	}
-}
-
-func depositedBridgeRecipients(recipients []types.BridgeRecipient, mainDeposits, nativeDeposits []recipientUtxo) []bridgeRecipientUtxo {
+func depositedBridgeRecipients(recipients []types.BridgeRecipient, mainDeposits, nativeDeposits []*utxo.Utxo) []bridgeRecipientUtxo {
 	out := make([]bridgeRecipientUtxo, len(recipients))
 	for i, recipient := range recipients {
 		out[i] = bridgeRecipientUtxo{
 			BridgeRecipient: recipient,
-			utxo:            mainDeposits[i].utxo,
+			utxo:            mainDeposits[i],
 		}
 		if len(nativeDeposits) > i {
-			out[i].nativeUtxo = nativeDeposits[i].utxo
+			out[i].nativeUtxo = nativeDeposits[i]
 		}
 	}
 	return out
@@ -149,7 +137,7 @@ func bridgeInputUtxoForToken(source *utxo.Utxo, tokenAddress string) (*utxo.Utxo
 	return utxo.CreateFrom(source, types.UtxoParams{Erc20TokenAddress: tokenAddress})
 }
 
-func hinkalBridgeBatch(
+func hinkalBridgeBatchPrepare(
 	ctx context.Context,
 	hinkal ihinkal.HinkalInternal,
 	chainID int,
@@ -158,31 +146,30 @@ func hinkalBridgeBatch(
 	feeStructure types.FeeStructure,
 	ethereumAddress string,
 	hashedEthereumAddress string,
-	statusID string,
-	txCompletionTime *int,
-) (string, error) {
+	pendingLeaves []string,
+) ([]web3.TransactCallRelayerBatchItem, error) {
 	if len(recipients) == 0 {
-		return "", errDepositAndBridgeNoRecipients
+		return nil, errDepositAndBridgeNoRecipients
 	}
 	tokenAddress := erc20Token.Erc20TokenAddress
 	contractData, err := constants.GetContractData(chainID)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	if contractData.EmporiumAddress == "" {
-		return "", errors.New("no Emporium Address")
+		return nil, errors.New("no Emporium Address")
 	}
 	lifiRouterAddress, err := constants.LifiRouterAddress(chainID)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	relay, err := relayerAddress(ctx, hinkal, chainID)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	fetchClient, err := hinkal.GetFetchClient(chainID)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	transactions := make([]web3.TransactCallRelayerBatchItem, 0, len(recipients))
@@ -223,6 +210,15 @@ func hinkalBridgeBatch(
 					}
 					inputUtxosArray = append(inputUtxosArray, []*utxo.Utxo{nativeUtxo})
 					onChainCreation = append(onChainCreation, false)
+				}
+
+				var speculative *types.SpeculativeTreeParams
+				if pendingLeaves != nil {
+					speculativeInputs, err := pretransaction.ToSpeculativeUtxos(inputUtxosArray)
+					if err != nil {
+						return err
+					}
+					speculative = &types.SpeculativeTreeParams{PendingLeaves: pendingLeaves, InputUtxos: speculativeInputs}
 				}
 
 				ops, err := privatewallet.CreateLifiBridgeOps(
@@ -283,6 +279,7 @@ func hinkalBridgeBatch(
 						MessageSeed:            messageSeed,
 						InputUtxos:             inputUtxosArray,
 						UseBlockedUtxos:        true,
+						Speculative:            speculative,
 						SubAccountPrivateKey:   recipient.TemporarySubAccount.PrivateKey,
 						EmporiumOps:            ops,
 						Submit:                 NewProofOnlySubmit(),
@@ -325,29 +322,12 @@ func hinkalBridgeBatch(
 			})
 		}
 		if err := group.Wait(); err != nil {
-			return "", err
+			return nil, err
 		}
 		transactions = append(transactions, batchTransactions...)
 	}
 
-	api.SafeUpdateDepositAndWithdrawStatus(ctx, api.UpdateDepositAndWithdrawStatusRequestBody{
-		ID:                    statusID,
-		ChainID:               chainID,
-		HashedEthereumAddress: hashedEthereumAddress,
-		Phase:                 types.DepositAndWithdrawPhaseBeforeScheduleWithdraw,
-	})
-	scheduleID, err := web3.TransactCallRelayerBatch(ctx, chainID, transactions, hashedEthereumAddress, txCompletionTime, "", "")
-	if err != nil {
-		return "", err
-	}
-	api.SafeUpdateDepositAndWithdrawStatus(ctx, api.UpdateDepositAndWithdrawStatusRequestBody{
-		ID:                    statusID,
-		ChainID:               chainID,
-		HashedEthereumAddress: hashedEthereumAddress,
-		Phase:                 types.DepositAndWithdrawPhaseAfterScheduleWithdraw,
-		ScheduleID:            scheduleID,
-	})
-	return scheduleID, nil
+	return transactions, nil
 }
 
 func HinkalDepositAndBridge(
@@ -386,15 +366,12 @@ func HinkalDepositAndBridge(
 	if err != nil {
 		return types.DepositAndSendExtendedResult{}, err
 	}
-	zeroFeeStructure := zeroDepositFeeStructure(feeStructure)
 	isNativeInput := strings.EqualFold(tokenAddress, constants.ZeroAddress)
 
-	recipientAddresses := make([]string, len(recipients))
 	mainTokenNetAmounts := make([]*big.Int, len(recipients))
 	nativeFeeAmounts := make([]*big.Int, len(recipients))
 	totalNativeFee := big.NewInt(0)
 	for i, recipient := range recipients {
-		recipientAddresses[i] = recipient.RecipientAddress
 		nativeFeeAmounts[i] = nativeFeeValue(recipient.Quote)
 		totalNativeFee.Add(totalNativeFee, nativeFeeAmounts[i])
 
@@ -405,22 +382,8 @@ func HinkalDepositAndBridge(
 		mainTokenNetAmounts[i] = fees.CalculateGrossAmountWithFee(netAmount, feeStructure)
 	}
 
-	mainDeposits, statusID, depositTxHash, err := HinkalDepositOnChainUtxos(
-		ctx,
-		hinkal,
-		chainID,
-		erc20Token,
-		mainTokenNetAmounts,
-		recipientAddresses,
-		zeroFeeStructure,
-		hashedEthereumAddress,
-		true,
-	)
-	if err != nil {
-		return types.DepositAndSendExtendedResult{}, err
-	}
-
-	var nativeDeposits []recipientUtxo
+	depositTokens := []types.ERC20Token{erc20Token}
+	depositAmounts := [][]*big.Int{mainTokenNetAmounts}
 	needsNativeDeposit := totalNativeFee.Sign() > 0 && !isNativeInput
 	if needsNativeDeposit {
 		nativeToken, err := web3.GetErc20TokenFromAPI(ctx, chainID, constants.ZeroAddress)
@@ -435,39 +398,44 @@ func HinkalDepositAndBridge(
 		for i, amount := range nativeFeeAmounts {
 			grossedNativeFees[i] = fees.CalculateGrossAmountWithFee(amount, nativeFeeStructure)
 		}
-		nativeDeposits, _, _, err = HinkalDepositOnChainUtxos(
-			ctx,
-			hinkal,
-			chainID,
-			*nativeToken,
-			grossedNativeFees,
-			recipientAddresses,
-			zeroFeeStructure,
-			hashedEthereumAddress,
-			true,
-		)
-		if err != nil {
-			return types.DepositAndSendExtendedResult{}, err
-		}
+		depositTokens = append(depositTokens, *nativeToken)
+		depositAmounts = append(depositAmounts, grossedNativeFees)
 	}
 
-	allDeposits := append([]recipientUtxo{}, mainDeposits...)
-	allDeposits = append(allDeposits, nativeDeposits...)
-	if err := waitForDepositedUtxosInMerkleTree(ctx, hinkal, chainID, allDeposits); err != nil {
+	preparedDeposit, err := PrepareDepositOnChainUtxos(ctx, hinkal, chainID, depositTokens, depositAmounts)
+	if err != nil {
 		return types.DepositAndSendExtendedResult{}, err
 	}
 
-	scheduleID, err := hinkalBridgeBatch(
-		ctx,
-		hinkal,
-		chainID,
-		erc20Token,
-		depositedBridgeRecipients(recipients, mainDeposits, nativeDeposits),
-		feeStructure,
-		ethereumAddress,
-		hashedEthereumAddress,
-		statusID,
-		txCompletionTime,
+	var nativeTokenUtxos []*utxo.Utxo
+	if needsNativeDeposit {
+		nativeTokenUtxos = preparedDeposit.DepositedUtxos[1]
+	}
+	recipientBridgeUtxos := depositedBridgeRecipients(recipients, preparedDeposit.DepositedUtxos[0], nativeTokenUtxos)
+
+	var depositTxHash string
+	var batchTransactions []web3.TransactCallRelayerBatchItem
+	// Plain errgroup, not WithContext: a failing proof must not cancel a deposit already in flight.
+	var group errgroup.Group
+	group.Go(func() error {
+		var err error
+		depositTxHash, err = SubmitDepositOnChainUtxos(ctx, hinkal, preparedDeposit, preEstimateGas)
+		return err
+	})
+	group.Go(func() error {
+		var err error
+		batchTransactions, err = hinkalBridgeBatchPrepare(
+			ctx, hinkal, chainID, erc20Token, recipientBridgeUtxos, feeStructure,
+			ethereumAddress, hashedEthereumAddress, preparedDeposit.PendingLeaves,
+		)
+		return err
+	})
+	if err := group.Wait(); err != nil {
+		return types.DepositAndSendExtendedResult{}, err
+	}
+
+	scheduleID, err := web3.TransactCallRelayerBatch(
+		ctx, chainID, batchTransactions, hashedEthereumAddress, txCompletionTime, "", "", depositTxHash,
 	)
 	if err != nil {
 		return types.DepositAndSendExtendedResult{}, err

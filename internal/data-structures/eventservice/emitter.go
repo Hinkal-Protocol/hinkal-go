@@ -126,15 +126,32 @@ func (e *BlockchainEventEmitter) Init(ctx context.Context) error {
 
 func (e *BlockchainEventEmitter) GetEventsInRange(ctx context.Context, from, to uint64) ([]*blockchainevent.BlockchainEvent, error) {
 	pages := buildPages(from, to, e.maxPageSize)
+	addrs := []common.Address{e.contractAddr}
+	if hook, ok := blockedUtxosHookAddress(e.chainID); ok {
+		addrs = append(addrs, hook)
+	}
 	var all []*blockchainevent.BlockchainEvent
 	for _, p := range pages {
-		evs, err := e.getEventsForSingleContract(ctx, e.contractAddr, p[0], p[1], 0)
-		if err != nil {
-			return nil, err
+		for _, addr := range addrs {
+			evs, err := e.getEventsForSingleContract(ctx, addr, p[0], p[1], 0)
+			if err != nil {
+				return nil, err
+			}
+			all = append(all, evs...)
 		}
-		all = append(all, evs...)
 	}
 	return all, nil
+}
+
+func blockedUtxosHookAddress(chainID int) (common.Address, bool) {
+	if constants.IsTronLike(chainID) {
+		return common.Address{}, false
+	}
+	addr, err := constants.DepositOnChainUtxosAddress(chainID)
+	if err != nil || addr == "" {
+		return common.Address{}, false
+	}
+	return common.HexToAddress(addr), true
 }
 
 func (e *BlockchainEventEmitter) GetLastBlockNumberForEventRequest(ctx context.Context) (uint64, error) {

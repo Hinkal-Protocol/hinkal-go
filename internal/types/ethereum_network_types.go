@@ -18,8 +18,6 @@ type EthereumNetwork struct {
 	Name        string
 	ChainID     int
 	RPCURL      string
-	FetchRPCURL string
-	WsRPCURL    string
 	Supported   bool
 	Priority    int
 	MaxPageSize int

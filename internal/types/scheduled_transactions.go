@@ -1,14 +1,5 @@
 package types
 
-type DepositAndWithdrawPhase string
-
-const (
-	DepositAndWithdrawPhaseBeforeDeposit          DepositAndWithdrawPhase = "before_deposit"
-	DepositAndWithdrawPhaseAfterDeposit           DepositAndWithdrawPhase = "after_deposit"
-	DepositAndWithdrawPhaseBeforeScheduleWithdraw DepositAndWithdrawPhase = "before_schedule_withdraw"
-	DepositAndWithdrawPhaseAfterScheduleWithdraw  DepositAndWithdrawPhase = "after_schedule_withdraw"
-)
-
 type DepositAndSendExtendedResult struct {
 	DepositTxHash string `json:"depositTxHash"`
 	ScheduleID    string `json:"scheduleId"`
@@ -23,6 +14,7 @@ const (
 	ScheduledTransactionStatusSentOnChain       ScheduledTransactionStatus = "sent_on_chain"
 	ScheduledTransactionStatusCompleted         ScheduledTransactionStatus = "completed"
 	ScheduledTransactionStatusFailed            ScheduledTransactionStatus = "failed"
+	ScheduledTransactionStatusDepositFailed     ScheduledTransactionStatus = "deposit_failed"
 )
 
 type ScheduledTransactionItemStatus struct {

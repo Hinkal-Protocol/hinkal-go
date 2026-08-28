@@ -2,19 +2,28 @@ package transactions
 
 import (
 	"context"
+	"errors"
 	"math/big"
+	"strings"
 
 	"github.com/Hinkal-Protocol/hinkal-go/internal/api"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
-	cryptokeys "github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/crypto-keys"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/hinkal/ihinkal"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/utxo"
 	pretransaction "github.com/Hinkal-Protocol/hinkal-go/internal/functions/pre-transaction"
-	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/snarkjs"
-	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/utils"
-	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/web3"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/types"
 )
+
+var errClaimInvalidRecipientInfo = errors.New("invalid recipient info")
+
+func hasClaimRecipientParts(recipientInfo string) bool {
+	parts := strings.Split(recipientInfo, ",")
+	if len(parts) < 6 {
+		return false
+	}
+	stealthAddress, h00, h01, encryptionKey := parts[0], parts[1], parts[2], parts[5]
+	return stealthAddress != "" && h00 != "" && h01 != "" && encryptionKey != ""
+}
 
 func HinkalSolanaClaimUtxo(
 	ctx context.Context,
@@ -58,6 +67,10 @@ func HinkalSolanaClaimUtxo(
 		return "", errClaimUtxoKeyMismatch
 	}
 
+	if err := ensureSolanaDeployData(chainID); err != nil {
+		return "", err
+	}
+
 	sourceUtxo, err := utxo.CreateFrom(claimableUtxo, types.UtxoParams{NullifyingKey: resolvedNullifyingKey})
 	if err != nil {
 		return "", err
@@ -93,87 +106,39 @@ func HinkalSolanaClaimUtxo(
 	if err != nil {
 		return "", err
 	}
-	timeStamp := new(big.Int).SetInt64(utils.GetCurrentTimeInSeconds()).String()
+	if !hasClaimRecipientParts(recipientInfo) {
+		return "", errClaimInvalidRecipientInfo
+	}
 	amountChange := new(big.Int).Neg(sourceUtxo.Amount)
 	inputUtxos := []*utxo.Utxo{sourceUtxo, paddingUtxo}
-	outputUtxos, err := pretransaction.OutputUtxoProcessing(
-		utxoSpecificUserKeys,
-		inputUtxos,
-		amountChange,
-		timeStamp,
-		true,
-		recipientInfo,
-		recipientAmount,
-	)
-	if err != nil {
-		return "", err
-	}
-	if len(outputUtxos) < 2 {
-		return "", errSolanaTransferMissingOutput
-	}
 
 	relay, err := relayerAddress(ctx, hinkal, chainID)
 	if err != nil {
 		return "", err
 	}
 
-	randSeed, err := utils.RandomBigInt(31)
-	if err != nil {
-		return "", err
-	}
-	extraRandomization, err := cryptokeys.FindCorrectRandomization(randSeed, resolvedNullifyingKey)
-	if err != nil {
-		return "", err
-	}
-	encryptedOutputBytes, encryptedOutputInts, err := solanaTransferEncryptedOutputs(outputUtxos)
-	if err != nil {
-		return "", err
-	}
-
-	inputUtxosArray := [][]*utxo.Utxo{inputUtxos}
-	outputUtxosArray := [][]*utxo.Utxo{outputUtxos}
-	dimensions := types.DimDataType{
-		TokenNumber:     1,
-		NullifierAmount: len(inputUtxos),
-		OutputAmount:    len(outputUtxos),
-	}
-	proof, err := snarkjs.ConstructSolanaZkProof(ctx, snarkjs.ConstructSolanaZkProofParams{
-		GenerateProofRemotely: hinkal.GenerateProofRemotely(),
-		MerkleTree:            hinkal.MerkleTree(chainID),
-		UserKeys:              utxoSpecificUserKeys,
-		MintAddresses:         []string{tokenAddress},
-		InputUtxos:            inputUtxosArray,
-		OutputUtxos:           outputUtxosArray,
-		ExtraRandomization:    extraRandomization,
-		RelayerFee:            totalRelayerFee,
-		VariableRate:          big.NewInt(0),
-		RecipientAddress:      constants.SolanaNativeAddress,
-		SignerAddress:         relay,
-		Dimensions:            dimensions,
-		EncryptedOutputs:      encryptedOutputBytes,
-		ChainID:               chainID,
-	})
-	if err != nil {
-		return "", err
-	}
-
-	return web3.SolanaTransactCallRelayer(ctx, api.SolanaTransactionBody{
-		ChainID:      chainID,
-		RelayAddress: relay,
-		FunctionName: "transfer",
-		Args: api.SolanaArgs{
-			ProofAArr:        proof.ProofAArr,
-			ProofBArr:        proof.ProofBArr,
-			ProofCArr:        proof.ProofCArr,
-			PublicInputsArr:  proof.PublicInputsArr,
-			EncryptedOutputs: encryptedOutputInts,
-			RelayerFee:       totalRelayerFee.String(),
-			Dimensions:       dimensions,
-		},
+	result, err := SolanaTransact(ctx, hinkal, HinkalSolanaTransactParams{
+		ChainID:       chainID,
+		MintAddresses: []string{tokenAddress},
+		AmountChanges: []*big.Int{amountChange},
+		RelayAddress:  relay,
+		Recipient:     constants.SolanaNativeAddress,
+		Signer:        relay,
+		FunctionName:  "transfer",
 		Accounts: api.SolanaTransactAccounts{
 			Recipient: relay,
 			Mint:      nonNativeMintString(tokenAddress),
 		},
-		CommitmentValidationData: proof.CommitmentValidationData,
+		RelayerFee:       totalRelayerFee,
+		VariableRate:     big.NewInt(0),
+		RecipientAddress: recipientInfo,
+		RecipientAmounts: []*big.Int{recipientAmount},
+		InputUtxos:       [][]*utxo.Utxo{inputUtxos},
+		UserKeys:         utxoSpecificUserKeys,
+		Submit:           SolanaTransactSubmit{Mode: SolanaSubmitModeRelayer},
 	})
+	if err != nil {
+		return "", err
+	}
+	return result.TxHash, nil
 }

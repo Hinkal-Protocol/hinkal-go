@@ -140,7 +140,7 @@ func (h *Hinkal) ProoflessDeposit(
 		return types.TransactionRequest{}, "", err
 	}
 	if constants.IsSolanaLike(chainID) {
-		txDataOrSignature, err := transactions.HinkalSolanaProoflessDeposit(ctx, h, erc20Tokens, amountChanges, stealthAddressStructures, returnTxData)
+		txDataOrSignature, err := transactions.HinkalSolanaProoflessDeposit(ctx, h, erc20Tokens, amountChanges, stealthAddressStructures, recipientEncryptionKeysOverride, returnTxData)
 		return types.TransactionRequest{}, txDataOrSignature, err
 	}
 	return transactions.HinkalProoflessDeposit(ctx, h, erc20Tokens, amountChanges, stealthAddressStructures, recipientEncryptionKeysOverride, createBlockedUtxos, feeStructure, orderID, returnTxData)
@@ -362,7 +362,7 @@ func (h *Hinkal) Swap(
 	if err != nil {
 		return "", err
 	}
-	return transactions.HinkalSwap(ctx, h, erc20Tokens, deltaAmounts, externalActionID, swapData, feeToken, feeStructureOverride)
+	return transactions.HinkalSwap(ctx, h, erc20Tokens, deltaAmounts, externalActionID, swapData, feeToken, feeStructureOverride, constants.DefaultBridgingSlippage)
 }
 
 func (h *Hinkal) SwapSolana(

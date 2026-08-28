@@ -47,7 +47,7 @@ func submitEvm(ctx context.Context, hinkal ihinkal.HinkalInternal, params Hinkal
 }
 
 func submitTron(ctx context.Context, hinkal ihinkal.HinkalInternal, params HinkalTransactParams, proof TransactProof) (TransactResult, error) {
-	// TransactCallDirectTron calls ReorderZkCallData itself,
+	// TransactCallDirectTron calls ReorderZkCallData itself with modify=false,
 	// so this path must not reorder first or the calldata gets mutated twice.
 	if params.Submit.Mode == SubmitModeSelf {
 		self := params.Submit.Self
@@ -59,12 +59,13 @@ func submitTron(ctx context.Context, hinkal ihinkal.HinkalInternal, params Hinka
 			return TransactResult{}, err
 		}
 		txid, err := tron.TransactCallDirectTron(ctx, client, params.ChainID, tron.TransactCallDirectTronParams{
-			Amounts:         self.ApprovalAmounts,
-			TokensToApprove: self.Erc20Tokens,
-			ZkCallData:      proof.ZkCallData,
-			CircomData:      proof.CircomData,
-			DimData:         proof.DimData,
-			PreEstimateGas:  self.PreEstimateGas,
+			Amounts:                   self.ApprovalAmounts,
+			TokensToApprove:           self.Erc20Tokens,
+			ZkCallData:                proof.ZkCallData,
+			CircomData:                proof.CircomData,
+			DimData:                   proof.DimData,
+			PreEstimateGas:            self.PreEstimateGas,
+			PrecomputedProofSignature: proof.TronProofSignature,
 		})
 		return TransactResult{TxHash: txid, Proof: proof}, err
 	}
@@ -72,7 +73,7 @@ func submitTron(ctx context.Context, hinkal ihinkal.HinkalInternal, params Hinka
 	if proof.TronProofSignature != nil {
 		tron.SwapTronBCoordinate(&proof.ZkCallData)
 	} else {
-		signature, err := tron.ReorderZkCallData(ctx, params.ChainID, &proof.ZkCallData, proof.DimData, proof.CircomData, true)
+		signature, err := tron.ReorderZkCallData(ctx, params.ChainID, &proof.ZkCallData, proof.DimData, proof.CircomData, true, params.SkipLock)
 		if err != nil {
 			return TransactResult{}, err
 		}

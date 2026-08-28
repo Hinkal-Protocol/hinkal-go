@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strconv"
 	"strings"
 
 	cryptokeys "github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/crypto-keys"
@@ -12,6 +13,44 @@ import (
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/utils"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/types"
 )
+
+func recipientAmountAt(recipientAddress string, recipientAmounts []*big.Int, index int) *big.Int {
+	if recipientAddress == "" {
+		return nil
+	}
+	if index < len(recipientAmounts) && recipientAmounts[index] != nil {
+		return recipientAmounts[index]
+	}
+	return big.NewInt(0)
+}
+
+func BuildOutputUtxos(
+	userKeys *cryptokeys.UserKeys,
+	inputUtxosArray [][]*utxo.Utxo,
+	amountChanges []*big.Int,
+	recipientAddress string,
+	recipientAmounts []*big.Int,
+) ([][]*utxo.Utxo, error) {
+	timeStamp := strconv.FormatInt(utils.GetCurrentTimeInSeconds(), 10)
+
+	outputUtxosArray := make([][]*utxo.Utxo, len(inputUtxosArray))
+	for i, inputUtxos := range inputUtxosArray {
+		outputUtxos, err := OutputUtxoProcessing(
+			userKeys,
+			inputUtxos,
+			amountChanges[i],
+			timeStamp,
+			true,
+			recipientAddress,
+			recipientAmountAt(recipientAddress, recipientAmounts, i),
+		)
+		if err != nil {
+			return nil, err
+		}
+		outputUtxosArray[i] = outputUtxos
+	}
+	return outputUtxosArray, nil
+}
 
 func countTotalAmountInUtxos(utxos []*utxo.Utxo) *big.Int {
 	total := new(big.Int)

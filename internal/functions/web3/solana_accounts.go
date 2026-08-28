@@ -1,6 +1,7 @@
 package web3
 
 import (
+	"encoding/binary"
 	"math/big"
 
 	solana "github.com/gagliardetto/solana-go"
@@ -52,6 +53,12 @@ func GetStorageAccountPublicKey(programID, originalDeployer solana.PublicKey) (s
 
 func GetMerkleAccountPublicKey(programID, originalDeployer solana.PublicKey) (solana.PublicKey, error) {
 	return mustFindPDA([][]byte{[]byte("hinkal_merkle"), originalDeployer.Bytes()}, programID)
+}
+
+func GetRootBucketPublicKey(programID, merkleAccount solana.PublicKey, bucketIndex *big.Int) (solana.PublicKey, error) {
+	seed := make([]byte, 8)
+	binary.LittleEndian.PutUint64(seed, bucketIndex.Uint64())
+	return mustFindPDA([][]byte{[]byte("hinkal_root_bucket"), merkleAccount.Bytes(), seed}, programID)
 }
 
 func GetStorageVaultPublicKey(programID, originalDeployer solana.PublicKey) (solana.PublicKey, error) {

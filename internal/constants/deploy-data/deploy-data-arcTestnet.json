@@ -1,8 +1,9 @@
 {
   "hinkalAddress": "0x7cb60446d7635C68EDf1c568cac74A1f98c1Cfa4",
-  "hinkalHelperAddress": "0x9F8C8D60d5093523c702FFBc7035DCb9537271dC",
+  "hinkalHelperAddress": "0x385C83d0A80AfcD23B508D4602f576F09f15097b",
+  "depositOnChainUtxosExternalActionAddress": "0xf2c1e80Fc268AfC50f45145Bd0D97c756D7C2014",
   "hinkalWrapperAddress": "0xC39A087096430Dd12d288227d7dA749D8Db8c669",
   "emporiumAddress": "0x70F48817aaE2Bb9dD042D4Ea46ECfe1C168ed3e0",
   "hinkalWalletAddress": "0x987F7979617361e002E91071978be99D10abeB80",
-  "lifiExternalActionInstanceAddress": "0x93113974Dd1A8F5C1a7974C9d5E753b0bD0b9261"
+  "lifiExternalActionInstanceAddress": "0x8a7f66eCb18aBbe272BD50A04768D88191D84961"
 }

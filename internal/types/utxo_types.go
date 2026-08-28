@@ -27,15 +27,6 @@ type UtxoConstructorParamsWithSenderAddress struct {
 	UtxoParams         UtxoParams
 	SenderAddress      string
 	ClaimableSignature string
-	ShieldedPrivateKey string
-}
-
-func (p UtxoConstructorParamsWithSenderAddress) ResolvedUtxoParams() UtxoParams {
-	params := p.UtxoParams
-	if params.NullifyingKey == "" && p.ShieldedPrivateKey != "" {
-		params.NullifyingKey = p.ShieldedPrivateKey
-	}
-	return params
 }
 
 func (p UtxoParams) MarshalJSON() ([]byte, error) {

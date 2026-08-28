@@ -13,20 +13,26 @@ type TokenBalanceEntry struct {
 	Amount            string `json:"amount"`
 }
 
-type GetBalancesEnclaveResponse struct {
+type ChainBalancesEntry struct {
+	ChainID              int                 `json:"chainId"`
 	ConfirmedBalances    []TokenBalanceEntry `json:"confirmedBalances"`
 	PreConfirmedBalances []TokenBalanceEntry `json:"preConfirmedBalances"`
+	Error                string              `json:"error,omitempty"`
+}
+
+type GetBalancesEnclaveResponse struct {
+	Results []ChainBalancesEntry `json:"results"`
 }
 
 func GetBalancesEnclaveCall(
 	ctx context.Context,
-	chainID int,
+	chainIDs []int,
 	keyCiphertext, inputCiphertext string,
 	useBlockedUtxos bool,
 	hashedEthereumAddress string,
-) (*GetBalancesEnclaveResponse, error) {
+) (json.RawMessage, error) {
 	body := map[string]any{
-		"chainId":         chainID,
+		"chainIds":        chainIDs,
 		"input":           inputCiphertext,
 		"key":             keyCiphertext,
 		"useBlockedUtxos": useBlockedUtxos,
@@ -34,11 +40,11 @@ func GetBalancesEnclaveCall(
 	if hashedEthereumAddress != "" {
 		body["hashedEthereumAddress"] = hashedEthereumAddress
 	}
-	var resp GetBalancesEnclaveResponse
-	if err := Post(ctx, constants.GetEnclaveURL()+constants.EnclaveConfig.GetBalances, body, &resp); err != nil {
+	var raw json.RawMessage
+	if err := Post(ctx, constants.GetEnclaveURL()+constants.EnclaveConfig.GetBalances, body, &raw); err != nil {
 		return nil, err
 	}
-	return &resp, nil
+	return raw, nil
 }
 
 type DecryptUtxoEnclaveResponse struct {
@@ -60,19 +66,19 @@ func DecryptUtxoEnclaveCall(ctx context.Context, chainID int, keyCiphertext, inp
 	return &resp, nil
 }
 
-type StoreUtxoResponse struct {
+type StoreClaimableKeyResponse struct {
 	Status string `json:"status"`
 }
 
-func StoreUtxoEnclaveCall(ctx context.Context, recipientEthAddress, encryptedUtxo, key string, chainID int) (*StoreUtxoResponse, error) {
+func StoreClaimableKeyEnclaveCall(ctx context.Context, recipientEthAddress, encryptedMaterial, key string, chainID int) (*StoreClaimableKeyResponse, error) {
 	body := map[string]any{
 		"recipientEthAddress": recipientEthAddress,
-		"encryptedUtxo":       encryptedUtxo,
+		"encryptedMaterial":   encryptedMaterial,
 		"key":                 key,
 		"chainId":             chainID,
 	}
-	var resp StoreUtxoResponse
-	if err := Post(ctx, constants.GetEnclaveURL()+constants.EnclaveConfig.StoreUtxo, body, &resp); err != nil {
+	var resp StoreClaimableKeyResponse
+	if err := Post(ctx, constants.GetEnclaveURL()+constants.EnclaveConfig.StoreClaimableKey, body, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -86,24 +92,18 @@ func GetUtxosEnclaveCall(
 	ctx context.Context,
 	ethAddress, encryptedSignature, key string,
 	chainID int,
-	isSolanaLedger bool,
-	txMessageForSolanaLedger string,
-) (*GetUtxosResponse, error) {
+) (json.RawMessage, error) {
 	body := map[string]any{
 		"ethAddress":         ethAddress,
 		"encryptedSignature": encryptedSignature,
 		"key":                key,
 		"chainId":            chainID,
-		"isSolanaLedger":     isSolanaLedger,
 	}
-	if txMessageForSolanaLedger != "" {
-		body["txMessageForSolanaLedger"] = txMessageForSolanaLedger
-	}
-	var resp GetUtxosResponse
-	if err := Post(ctx, constants.GetEnclaveURL()+constants.EnclaveConfig.GetUtxos, body, &resp); err != nil {
+	var raw json.RawMessage
+	if err := Post(ctx, constants.GetEnclaveURL()+constants.EnclaveConfig.GetUtxos, body, &raw); err != nil {
 		return nil, err
 	}
-	return &resp, nil
+	return raw, nil
 }
 
 type StoreAndGetSignatureResponse struct {
@@ -113,35 +113,30 @@ type StoreAndGetSignatureResponse struct {
 func StoreAndGetSignatureEnclaveCall(
 	ctx context.Context,
 	ethAddress, encryptedSignature, key string,
-	isSolanaLedger bool,
-	txMessageForSolanaLedger string,
-) (*StoreAndGetSignatureResponse, error) {
+) (json.RawMessage, error) {
 	body := map[string]any{
 		"ethAddress":         ethAddress,
 		"encryptedSignature": encryptedSignature,
 		"key":                key,
-		"isSolanaLedger":     isSolanaLedger,
 	}
-	if txMessageForSolanaLedger != "" {
-		body["txMessageForSolanaLedger"] = txMessageForSolanaLedger
-	}
-	var resp StoreAndGetSignatureResponse
-	if err := Post(ctx, constants.GetEnclaveURL()+constants.EnclaveConfig.StoreAndGetSignature, body, &resp); err != nil {
+	var raw json.RawMessage
+	if err := Post(ctx, constants.GetEnclaveURL()+constants.EnclaveConfig.StoreAndGetSignature, body, &raw); err != nil {
 		return nil, err
 	}
-	return &resp, nil
+	return raw, nil
 }
 
 type SignProofRequest struct {
-	ChainID         int        `json:"chainId"`
-	A               []string   `json:"a"`
-	B               [][]string `json:"b"`
-	C               []string   `json:"c"`
-	Inputs          []string   `json:"inputs"`
-	VerifierID      string     `json:"verifier_id"`
-	TokenNumber     int        `json:"tokenNumber"`
-	NullifierAmount int        `json:"nullifierAmount"`
-	OutputAmount    int        `json:"outputAmount"`
+	ChainID          int        `json:"chainId"`
+	A                []string   `json:"a"`
+	B                [][]string `json:"b"`
+	C                []string   `json:"c"`
+	Inputs           []string   `json:"inputs"`
+	ExternalActionID string     `json:"externalActionId"`
+	TokenNumber      int        `json:"tokenNumber"`
+	NullifierAmount  int        `json:"nullifierAmount"`
+	OutputAmount     int        `json:"outputAmount"`
+	SkipLock         bool       `json:"skipLock"`
 }
 
 type signProofResponse struct {

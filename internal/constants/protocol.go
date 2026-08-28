@@ -14,4 +14,6 @@ const (
 	EnclaveSignerAddress = "0x655C3Aa937530E06A336458D1CF168d297B597A2"
 
 	BpsDenominator int64 = 10_000
+
+	MaxTronSelfOutputs = 4
 )

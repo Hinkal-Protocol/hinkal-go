@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"slices"
 
+	"github.com/ethereum/go-ethereum/common"
 	solana "github.com/gagliardetto/solana-go"
 
 	"github.com/Hinkal-Protocol/hinkal-go/internal/crypto"
@@ -23,17 +25,17 @@ type ConstructSolanaZkProofParams struct {
 	MintAddresses         []string
 	InputUtxos            [][]*utxo.Utxo
 	OutputUtxos           [][]*utxo.Utxo
-	ExtraRandomization    *big.Int
 	RelayerFee            *big.Int
 	VariableRate          *big.Int
 	RecipientAddress      string
 	SignerAddress         string
 	Dimensions            types.DimDataType
-	EncryptedOutputs      [][]byte
+	OnChainCreation       []bool
 	ChainID               int
 	Instructions          []solanautils.HinkalInstruction
 	RemainingAccounts     []solana.AccountMeta
 	SwapperAccountSalt    *big.Int
+	IsSpeculativeTree     bool
 }
 
 type ConstructSolanaZkProofResult struct {
@@ -42,6 +44,9 @@ type ConstructSolanaZkProofResult struct {
 	ProofCArr                []int
 	PublicInputsArr          [][]int
 	CommitmentValidationData *types.CommitmentValidationDataType
+	EncryptedOutputs         [][]byte
+	OnChainEncryptedOutput   []byte
+	RootHashHinkalIndex      *big.Int
 }
 
 func byte32Ints(value *big.Int) []int {
@@ -117,10 +122,48 @@ func ConstructSolanaZkProof(ctx context.Context, params ConstructSolanaZkProofPa
 	}
 	spendingPublicKey := []*big.Int{spendingKeyPair.PubSpendingBJJPoint[0], spendingKeyPair.PubSpendingBJJPoint[1]}
 
-	stealthAddressStructure, err := CalcStealthAddressStructure(params.ExtraRandomization, nullifyingPrivateKey, spendingPublicKey)
+	randSeed, err := utils.RandomBigInt(31)
 	if err != nil {
 		return ConstructSolanaZkProofResult{}, err
 	}
+	extraRandomization, err := cryptokeys.FindCorrectRandomization(randSeed, nullifyingPrivateKey)
+	if err != nil {
+		return ConstructSolanaZkProofResult{}, err
+	}
+
+	stealthAddressStructure, err := CalcStealthAddressStructure(extraRandomization, nullifyingPrivateKey, spendingPublicKey)
+	if err != nil {
+		return ConstructSolanaZkProofResult{}, err
+	}
+	var onChainEncryptedOutput []byte
+	if slices.Contains(params.OnChainCreation, true) {
+		ownEncryptionKeyPair, keyErr := cryptokeys.GetEncryptionKeyPair(nullifyingPrivateKey)
+		if keyErr != nil {
+			return ConstructSolanaZkProofResult{}, keyErr
+		}
+		onChainEncryptedOutput, err = utxo.EncryptEncryptionKeyAndStealthAddress(
+			ownEncryptionKeyPair.PublicKey, stealthAddressStructure.StealthAddress,
+		)
+		if err != nil {
+			return ConstructSolanaZkProofResult{}, err
+		}
+	}
+
+	calculatedEncryptedOutputs, err := CalcEncryptedOutputs(params.OutputUtxos)
+	if err != nil {
+		return ConstructSolanaZkProofResult{}, err
+	}
+	encryptedOutputs := make([][]byte, 0, len(calculatedEncryptedOutputs))
+	for tokenIndex, tokenOutputs := range calculatedEncryptedOutputs {
+		if tokenIndex < len(params.OnChainCreation) && params.OnChainCreation[tokenIndex] {
+			encryptedOutputs = append(encryptedOutputs, nil)
+			continue
+		}
+		for _, output := range tokenOutputs {
+			encryptedOutputs = append(encryptedOutputs, common.FromHex(output))
+		}
+	}
+
 	messageSeed, err := utils.RandomBigInt(31)
 	if err != nil {
 		return ConstructSolanaZkProofResult{}, err
@@ -161,7 +204,8 @@ func ConstructSolanaZkProof(ctx context.Context, params ConstructSolanaZkProofPa
 		params.Dimensions,
 		recipientPublicKey,
 		signerPublicKey,
-		params.EncryptedOutputs,
+		encryptedOutputs,
+		onChainEncryptedOutput,
 		relayerFee,
 		variableRate,
 		params.Instructions,
@@ -169,7 +213,7 @@ func ConstructSolanaZkProof(ctx context.Context, params ConstructSolanaZkProofPa
 	)
 
 	amountChanges := CalcAmountChanges(params.InputUtxos, params.OutputUtxos, false)
-	data, err := GetDataFromWorkers(ctx, params.ChainID, params.MerkleTree, params.InputUtxos)
+	data, err := GetDataFromWorkers(ctx, params.ChainID, params.MerkleTree, params.InputUtxos, params.IsSpeculativeTree)
 	if err != nil {
 		return ConstructSolanaZkProofResult{}, err
 	}
@@ -309,5 +353,8 @@ func ConstructSolanaZkProof(ctx context.Context, params ConstructSolanaZkProofPa
 		ProofCArr:                proofCArr,
 		PublicInputsArr:          publicInputsArr,
 		CommitmentValidationData: mainResult.CommitmentValidationData,
+		EncryptedOutputs:         encryptedOutputs,
+		OnChainEncryptedOutput:   onChainEncryptedOutput,
+		RootHashHinkalIndex:      data.RootHashHinkalIndex,
 	}, nil
 }

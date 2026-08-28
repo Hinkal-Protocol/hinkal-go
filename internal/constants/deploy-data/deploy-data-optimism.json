@@ -1,8 +1,10 @@
 {
-  "hinkalAddress": "0xfc6f822A982F987AfC1DE65d0b9BAaC68888024a",
-  "hinkalHelperAddress": "0x91a065E81e28dBf62FCBD7020D2bFaC07FB0b47d",
-  "hinkalWrapperAddress": "0x4EEC778F7aA8cfEE40aB438D3B847DF59D0621BE",
-  "emporiumAddress": "0xD7eF077523B61C9704Bf3361A39b0eEfd3Ea2d56",
-  "hinkalWalletAddress": "0xd1D8D4Eec685DF5A9595E7A9Ec8073945CCDC57a",
-  "lifiExternalActionInstanceAddress": "0x6A58F4e36C885fA1e3EA4Eb0B5BE81f7a06c6457"
+  "hinkalAddress": "0x25BBb093BA3cB978a5C00C31fFaC8Fdc343535cF",
+  "hinkalHelperAddress": "0x1d9a22704Cf651184c754B127d51fad80e4887f0",
+  "hinkalWrapperAddress": "0x214D8a8Bc9f671a35deA7e896F1ae1c2f6861b3B",
+  "emporiumAddress": "0xdC677d309D86872B3350E01473B4Cf0D6B0806FE",
+  "hinkalWalletAddress": "0x4B80DDB181bE35A64d378cfd2429ED9F8b6AE6fD",
+  "lifiExternalActionInstanceAddress": "0x8b474575F5138E236474e2f42395c8a803B2487A",
+  "depositOnChainUtxosExternalActionAddress": "0x120478B9643CA3b708D1e06b5dFdC5C727C5A3b4",
+  "timelockAddress": "0xDFaFA4F3Db041546C999B28533FA6B8b7AD474eA"
 }

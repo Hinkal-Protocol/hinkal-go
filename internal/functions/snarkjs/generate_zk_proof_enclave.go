@@ -85,12 +85,12 @@ func GenerateZkProofEnclave(
 		return nil, fmt.Errorf("snarkjs: marshal enclave inputs: %w", err)
 	}
 
-	keyCiphertext, inputCiphertext, err := enclave.MakeHandshakeAndEncrypt(ctx, inputBytes)
+	handshake, err := enclave.MakeHandshakeAndEncrypt(ctx, inputBytes)
 	if err != nil {
 		return nil, err
 	}
 
-	responses, err := api.GenerateProofsEnclaveCall(ctx, wasmFilenames, zkeyFilenames, inputCiphertext, keyCiphertext)
+	responses, err := api.GenerateProofsEnclaveCall(ctx, wasmFilenames, zkeyFilenames, handshake.InputCiphertext, handshake.KeyCiphertext)
 	if err != nil {
 		return nil, err
 	}

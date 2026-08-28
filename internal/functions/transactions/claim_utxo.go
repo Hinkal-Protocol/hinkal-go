@@ -12,6 +12,7 @@ import (
 	"github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/utxo"
 	errorhandling "github.com/Hinkal-Protocol/hinkal-go/internal/error-handling"
 	pretransaction "github.com/Hinkal-Protocol/hinkal-go/internal/functions/pre-transaction"
+	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/utils"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/types"
 )
 
@@ -110,8 +111,18 @@ func HinkalClaimUtxo(
 	if err != nil {
 		return "", err
 	}
-	if claimableUtxo.NullifyingKey != "" && !strings.EqualFold(claimableUtxo.NullifyingKey, resolvedNullifyingKey) {
-		return "", errClaimUtxoKeyMismatch
+	if claimableUtxo.NullifyingKey != "" {
+		storedKey, err := utils.ParseBigInt(claimableUtxo.NullifyingKey)
+		if err != nil {
+			return "", err
+		}
+		resolvedKey, err := utils.ParseBigInt(resolvedNullifyingKey)
+		if err != nil {
+			return "", err
+		}
+		if storedKey.Cmp(resolvedKey) != 0 {
+			return "", errClaimUtxoKeyMismatch
+		}
 	}
 
 	sourceUtxo, err := utxo.CreateFrom(claimableUtxo, types.UtxoParams{NullifyingKey: resolvedNullifyingKey})

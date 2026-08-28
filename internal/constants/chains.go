@@ -79,40 +79,13 @@ func GetNonLocalhostChainID(chainID int) int {
 	return LocalhostNetwork
 }
 
-const AlchemyTestKey = "X4IiEZsSzGOrJq8tzq7Y3"
-
-const AlchemyProdKey = "XzUgeU8YiIIzkD7j2GWnTsFUck7wGgK9"
-
-const HeliusRPCURL = "https://mainnet.helius-rpc.com/?api-key=40800ff4-28f7-43da-be87-241639e50c4b"
-
-const heliusSolanaRPCURL = "https://mainnet.helius-rpc.com/?api-key=54ad9ec9-dad6-41de-b961-e3e8ea7a7188"
-
-func AlchemyAPIKey() string {
-	if Mode == DeploymentModeProduction {
-		return AlchemyProdKey
-	}
-	return AlchemyTestKey
-}
-
-func heliusURL() string {
-	return heliusSolanaRPCURL
-}
-
-func alchemyURL(subdomain string) string {
-	return fmt.Sprintf("https://%s.g.alchemy.com/v2/%s", subdomain, AlchemyAPIKey())
-}
-
-func alchemyWS(subdomain string) string {
-	return fmt.Sprintf("wss://%s.g.alchemy.com/v2/%s", subdomain, AlchemyAPIKey())
-}
+// RPCURL below is public RPC only; internal/api's fallback transport proxies through Hinkal's backend when it fails.
 
 var EthereumNetworkRegistry = map[int]types.EthereumNetwork{
 	ChainIDs.EthMainnet: {
 		Name:        "Ethereum",
 		ChainID:     ChainIDs.EthMainnet,
-		RPCURL:      "https://rpc.ankr.com/eth",
-		FetchRPCURL: alchemyURL("eth-mainnet"),
-		WsRPCURL:    alchemyWS("eth-mainnet"),
+		RPCURL:      "https://ethereum-rpc.publicnode.com",
 		Supported:   true,
 		Priority:    1,
 		MaxPageSize: 900000,
@@ -120,9 +93,7 @@ var EthereumNetworkRegistry = map[int]types.EthereumNetwork{
 	ChainIDs.ArbMainnet: {
 		Name:        "Arbitrum",
 		ChainID:     ChainIDs.ArbMainnet,
-		RPCURL:      "https://endpoints.omniatech.io/v1/arbitrum/one/public",
-		FetchRPCURL: alchemyURL("arb-mainnet"),
-		WsRPCURL:    alchemyWS("arb-mainnet"),
+		RPCURL:      "https://arbitrum-one-rpc.publicnode.com",
 		Supported:   true,
 		Priority:    2,
 		MaxPageSize: 500000,
@@ -130,9 +101,7 @@ var EthereumNetworkRegistry = map[int]types.EthereumNetwork{
 	ChainIDs.Optimism: {
 		Name:        "Optimism",
 		ChainID:     ChainIDs.Optimism,
-		RPCURL:      "https://optimism-mainnet.infura.io/v3/c26b99456bb6464bb498926ff5162903",
-		FetchRPCURL: alchemyURL("opt-mainnet"),
-		WsRPCURL:    alchemyWS("opt-mainnet"),
+		RPCURL:      "https://optimism-rpc.publicnode.com",
 		Supported:   true,
 		Priority:    3,
 		MaxPageSize: 900000,
@@ -140,9 +109,7 @@ var EthereumNetworkRegistry = map[int]types.EthereumNetwork{
 	ChainIDs.Polygon: {
 		Name:        "Polygon",
 		ChainID:     ChainIDs.Polygon,
-		RPCURL:      "https://polygon-rpc.com",
-		FetchRPCURL: alchemyURL("polygon-mainnet"),
-		WsRPCURL:    alchemyWS("polygon-mainnet"),
+		RPCURL:      "https://polygon-bor-rpc.publicnode.com",
 		Supported:   true,
 		Priority:    4,
 		MaxPageSize: 900000,
@@ -150,9 +117,7 @@ var EthereumNetworkRegistry = map[int]types.EthereumNetwork{
 	ChainIDs.Base: {
 		Name:        "Base",
 		ChainID:     ChainIDs.Base,
-		RPCURL:      "https://mainnet.base.org/",
-		FetchRPCURL: alchemyURL("base-mainnet"),
-		WsRPCURL:    alchemyWS("base-mainnet"),
+		RPCURL:      "https://base-rpc.publicnode.com",
 		Supported:   true,
 		Priority:    7,
 		MaxPageSize: 500000,
@@ -160,34 +125,29 @@ var EthereumNetworkRegistry = map[int]types.EthereumNetwork{
 	ChainIDs.ArcTestnet: {
 		Name:        "Arc Testnet",
 		ChainID:     ChainIDs.ArcTestnet,
-		RPCURL:      alchemyURL("arc-testnet"),
-		FetchRPCURL: alchemyURL("arc-testnet"),
-		WsRPCURL:    alchemyWS("arc-testnet"),
+		RPCURL:      "https://rpc.testnet.arc.network",
 		Supported:   true,
 		Priority:    8,
 		MaxPageSize: 9999,
 	},
 	ChainIDs.SolanaMainnet: {
-		Name:        "Solana",
-		ChainID:     ChainIDs.SolanaMainnet,
-		RPCURL:      "https://api.mainnet-beta.solana.com",
-		FetchRPCURL: heliusURL(),
-		Supported:   true,
-		Priority:    8,
+		Name:      "Solana",
+		ChainID:   ChainIDs.SolanaMainnet,
+		RPCURL:    "https://solana-rpc.publicnode.com",
+		Supported: true,
+		Priority:  8,
 	},
 	ChainIDs.SolanaLocalnet: {
-		Name:        "Solana Localnet",
-		ChainID:     ChainIDs.SolanaLocalnet,
-		RPCURL:      "http://127.0.0.1:8899",
-		FetchRPCURL: "http://127.0.0.1:8899",
-		Supported:   true,
-		Priority:    9,
+		Name:      "Solana Localnet",
+		ChainID:   ChainIDs.SolanaLocalnet,
+		RPCURL:    "http://127.0.0.1:8899",
+		Supported: true,
+		Priority:  9,
 	},
 	ChainIDs.TronNile: {
 		Name:        "Tron Nile",
 		ChainID:     ChainIDs.TronNile,
-		RPCURL:      alchemyURL("tron-testnet"),
-		FetchRPCURL: alchemyURL("tron-testnet"),
+		RPCURL:      "https://nile.trongrid.io",
 		Supported:   true,
 		Priority:    9,
 		MaxPageSize: 500000,
@@ -195,8 +155,7 @@ var EthereumNetworkRegistry = map[int]types.EthereumNetwork{
 	ChainIDs.TronMainnet: {
 		Name:        "Tron",
 		ChainID:     ChainIDs.TronMainnet,
-		RPCURL:      alchemyURL("tron-mainnet"),
-		FetchRPCURL: alchemyURL("tron-mainnet"),
+		RPCURL:      "https://tron-rpc.publicnode.com",
 		Supported:   true,
 		Priority:    10,
 		MaxPageSize: 500000,
@@ -204,8 +163,7 @@ var EthereumNetworkRegistry = map[int]types.EthereumNetwork{
 	ChainIDs.SepoliaTestnet: {
 		Name:        "Sepolia Testnet",
 		ChainID:     ChainIDs.SepoliaTestnet,
-		RPCURL:      alchemyURL("eth-sepolia"),
-		FetchRPCURL: alchemyURL("eth-sepolia"),
+		RPCURL:      "https://ethereum-sepolia-rpc.publicnode.com",
 		Supported:   true,
 		Priority:    11,
 		MaxPageSize: 900000,
@@ -214,8 +172,6 @@ var EthereumNetworkRegistry = map[int]types.EthereumNetwork{
 		Name:        "Tempo",
 		ChainID:     ChainIDs.Tempo,
 		RPCURL:      "https://rpc.tempo.xyz",
-		FetchRPCURL: "https://rpc.tempo.xyz",
-		// WsRPCURL: '', // wsRpcUrl is not used in GO
 		Supported:   true,
 		Priority:    12,
 		MaxPageSize: 9999,
@@ -223,9 +179,7 @@ var EthereumNetworkRegistry = map[int]types.EthereumNetwork{
 	ChainIDs.BNBMainnet: {
 		Name:        "BNB Chain",
 		ChainID:     ChainIDs.BNBMainnet,
-		RPCURL:      alchemyURL("bnb-mainnet"),
-		FetchRPCURL: alchemyURL("bnb-mainnet"),
-		WsRPCURL:    alchemyWS("bnb-mainnet"),
+		RPCURL:      "https://bsc-rpc.publicnode.com",
 		Supported:   true,
 		Priority:    13,
 		MaxPageSize: 900000,
@@ -233,52 +187,46 @@ var EthereumNetworkRegistry = map[int]types.EthereumNetwork{
 
 	// Bridge-destination-only chains: no Hinkal contracts, only valid as LiFi bridge targets in pay/dashboard.
 	ChainIDs.Avalanche: {
-		Name:        "Avalanche",
-		ChainID:     ChainIDs.Avalanche,
-		RPCURL:      "https://api.avax.network/ext/bc/C/rpc",
-		FetchRPCURL: "https://api.avax.network/ext/bc/C/rpc",
-		Supported:   false,
-		Priority:    14,
+		Name:      "Avalanche",
+		ChainID:   ChainIDs.Avalanche,
+		RPCURL:    "https://api.avax.network/ext/bc/C/rpc",
+		Supported: false,
+		Priority:  14,
 	},
 	ChainIDs.Cronos: {
-		Name:        "Cronos",
-		ChainID:     ChainIDs.Cronos,
-		RPCURL:      "https://evm.cronos.org",
-		FetchRPCURL: "https://evm.cronos.org",
-		Supported:   false,
-		Priority:    15,
+		Name:      "Cronos",
+		ChainID:   ChainIDs.Cronos,
+		RPCURL:    "https://evm.cronos.org",
+		Supported: false,
+		Priority:  15,
 	},
 	ChainIDs.Monad: {
-		Name:        "Monad",
-		ChainID:     ChainIDs.Monad,
-		RPCURL:      "https://rpc.monad.xyz",
-		FetchRPCURL: "https://rpc.monad.xyz",
-		Supported:   false,
-		Priority:    16,
+		Name:      "Monad",
+		ChainID:   ChainIDs.Monad,
+		RPCURL:    "https://rpc.monad.xyz",
+		Supported: false,
+		Priority:  16,
 	},
 	ChainIDs.Plasma: {
-		Name:        "Plasma",
-		ChainID:     ChainIDs.Plasma,
-		RPCURL:      "https://rpc.plasma.to",
-		FetchRPCURL: "https://rpc.plasma.to",
-		Supported:   false,
-		Priority:    17,
+		Name:      "Plasma",
+		ChainID:   ChainIDs.Plasma,
+		RPCURL:    "https://rpc.plasma.to",
+		Supported: false,
+		Priority:  17,
 	},
 	ChainIDs.Ink: {
-		Name:        "Ink",
-		ChainID:     ChainIDs.Ink,
-		RPCURL:      "https://rpc-gel.inkonchain.com",
-		FetchRPCURL: "https://rpc-gel.inkonchain.com",
-		Supported:   false,
-		Priority:    18,
+		Name:      "Ink",
+		ChainID:   ChainIDs.Ink,
+		RPCURL:    "https://rpc-gel.inkonchain.com",
+		Supported: false,
+		Priority:  18,
 	},
 	ChainIDs.HyperEVM: {
-		Name:        "HyperEVM",
-		ChainID:     ChainIDs.HyperEVM,
-		RPCURL:      "https://rpc.hyperliquid.xyz/evm",
-		FetchRPCURL: "https://rpc.hyperliquid.xyz/evm",
-		Supported:   false,
-		Priority:    19,
+		Name:      "HyperEVM",
+		ChainID:   ChainIDs.HyperEVM,
+		RPCURL:    "https://rpc.hyperliquid.xyz/evm",
+		Supported: false,
+		Priority:  19,
 	},
 }
 

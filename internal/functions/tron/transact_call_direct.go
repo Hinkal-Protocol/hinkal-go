@@ -8,6 +8,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 
+	"github.com/Hinkal-Protocol/hinkal-go/internal/api"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/contractabi"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/utils"
@@ -26,14 +27,15 @@ type TronClient interface {
 }
 
 type TransactCallDirectTronParams struct {
-	Amounts          []*big.Int
-	TokensToApprove  []types.ERC20Token // erc20TokenAddress in hex format
-	ZkCallData       types.NewZkCallDataType
-	CircomData       types.CircomDataType
-	DimData          types.DimDataType
-	ContractApproval string // base58 or hex; defaults to the Hinkal contract
-	ContractTransact string // base58 or hex; defaults to the Hinkal contract
-	PreEstimateGas   bool
+	Amounts                   []*big.Int
+	TokensToApprove           []types.ERC20Token // erc20TokenAddress in hex format
+	ZkCallData                types.NewZkCallDataType
+	CircomData                types.CircomDataType
+	DimData                   types.DimDataType
+	ContractApproval          string // base58 or hex; defaults to the Hinkal contract
+	ContractTransact          string // base58 or hex; defaults to the Hinkal contract
+	PreEstimateGas            bool
+	PrecomputedProofSignature *api.TronProofSignature
 }
 
 func hexTo32(s string) ([32]byte, error) {
@@ -89,9 +91,15 @@ func TransactCallDirectTron(ctx context.Context, client TronClient, chainID int,
 		return "", err
 	}
 
-	proofSig, err := ReorderZkCallData(ctx, chainID, &params.ZkCallData, params.DimData, params.CircomData, true)
-	if err != nil {
-		return "", err
+	proofSig := api.TronProofSignature{}
+	if params.PrecomputedProofSignature != nil {
+		proofSig = *params.PrecomputedProofSignature
+	} else {
+		// modify=false: the contract takes the b coordinates in the order the proof was built with.
+		proofSig, err = ReorderZkCallData(ctx, chainID, &params.ZkCallData, params.DimData, params.CircomData, false, false)
+		if err != nil {
+			return "", err
+		}
 	}
 	proofR, err := hexTo32(proofSig.R)
 	if err != nil {

@@ -4,9 +4,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"strings"
 
+	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/crypto"
 	cryptokeys "github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/crypto-keys"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/merkletree"
@@ -145,6 +147,20 @@ func GetSlippageValues(amountChanges []*big.Int) []*big.Int {
 		} else {
 			out[i] = new(big.Int).Set(am)
 		}
+	}
+	return out
+}
+
+func BuildSwapSlippageValues(deltaAmounts []*big.Int, slippagePercentage float64) []*big.Int {
+	bps := big.NewInt(int64(math.Round(slippagePercentage * 100)))
+	out := make([]*big.Int, len(deltaAmounts))
+	for i, amount := range deltaAmounts {
+		if amount.Sign() < 0 {
+			out[i] = new(big.Int).Set(amount)
+			continue
+		}
+		cut := new(big.Int).Div(new(big.Int).Mul(amount, bps), constants.BPSDenominator())
+		out[i] = new(big.Int).Sub(amount, cut)
 	}
 	return out
 }

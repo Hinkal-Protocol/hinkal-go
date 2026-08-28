@@ -69,7 +69,7 @@ func resetMerkleTreeForChain(ctx context.Context, h *Hinkal, chainID int) error 
 	}
 	fetcher := snapshot.NewSnapshotFetcherService(chainID, hinkalAddress)
 
-	rpcURL, err := constants.FetchRPCURL(chainID)
+	rpcURL, err := constants.RPCURL(chainID)
 	if err != nil {
 		return err
 	}

@@ -50,7 +50,7 @@ func NewSolanaBlockchainEventEmitter(chainID int, rpcURL, programID string, init
 	e := &SolanaBlockchainEventEmitter{
 		chainID:             chainID,
 		programID:           programID,
-		rpc:                 solana.NewClient(rpcURL),
+		rpc:                 api.NewSolanaClientWithFallback(rpcURL),
 		maxPageSize:         maxPageSize,
 		isServer:            isServer,
 		eventsFetchingMutex: eventsFetchingMutex,

@@ -2,7 +2,9 @@ package solana
 
 import (
 	"crypto/sha256"
+	"encoding/binary"
 	"errors"
+	"math/big"
 
 	"filippo.io/edwards25519"
 	"github.com/mr-tron/base58"
@@ -52,4 +54,22 @@ func GetMerkleAccountPublicKey(programID, originalDeployer string) (string, erro
 		return "", err
 	}
 	return base58.Encode(merkleAccount), nil
+}
+
+func GetRootBucketPublicKey(programID, merkleAccount string, bucketIndex *big.Int) (string, error) {
+	programIDBytes, err := base58.Decode(programID)
+	if err != nil {
+		return "", err
+	}
+	merkleAccountBytes, err := base58.Decode(merkleAccount)
+	if err != nil {
+		return "", err
+	}
+	seed := make([]byte, 8)
+	binary.LittleEndian.PutUint64(seed, bucketIndex.Uint64())
+	rootBucket, _, err := findProgramAddress([][]byte{[]byte("hinkal_root_bucket"), merkleAccountBytes, seed}, programIDBytes)
+	if err != nil {
+		return "", err
+	}
+	return base58.Encode(rootBucket), nil
 }
