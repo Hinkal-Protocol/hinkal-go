@@ -37,6 +37,30 @@ func enclavePost[T any](ctx context.Context, path string, payload any) (T, error
 	return verifySignedEnclaveResponse[T](signed.Data, signed.Signature)
 }
 
+// Like enclavePost, but for routes whose response carries nullifiers/commitments and must stay
+// sealed to the caller's own handshake key.
+func enclavePostSealedSigned[T any](ctx context.Context, path string, payload any) (T, error) {
+	var dest T
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return dest, err
+	}
+	handshake, err := MakeHandshakeAndEncrypt(ctx, body)
+	if err != nil {
+		return dest, err
+	}
+	reqBody := map[string]any{"key": handshake.KeyCiphertext, "inputs": handshake.InputCiphertext}
+	var raw json.RawMessage
+	if err := api.Post(ctx, constants.GetEnclaveURL()+path, reqBody, &raw); err != nil {
+		return dest, err
+	}
+	signed, err := OpenSealedResponse[types.SignedEnclaveResponse](raw, handshake.Key)
+	if err != nil {
+		return dest, err
+	}
+	return verifySignedEnclaveResponse[T](signed.Data, signed.Signature)
+}
+
 func bigIntStrings(values []*big.Int) []string {
 	if values == nil {
 		return nil
@@ -163,11 +187,14 @@ func PrepareTxEnclaveCall(ctx context.Context, uk *cryptokeys.UserKeys, params t
 		return types.PrepareTxResponseType{}, err
 	}
 
-	resp, err := enclavePost[types.PrepareTxResponseType](ctx, constants.EnclaveConfig.PrepareTx, payload)
+	resp, err := enclavePostSealedSigned[types.PrepareTxResponseType](ctx, constants.EnclaveConfig.PrepareTx, payload)
 	if err != nil {
 		return types.PrepareTxResponseType{}, err
 	}
 	if err := assertPrepareTxEchoMatches(payload, resp.Request); err != nil {
+		return types.PrepareTxResponseType{}, err
+	}
+	if err := verifyPrepareTxResponse(params.ChainID, payload, resp); err != nil {
 		return types.PrepareTxResponseType{}, err
 	}
 	return resp, nil
@@ -182,7 +209,7 @@ type PrepareStuckWithdrawParams struct {
 	HashedEthereumAddress string
 }
 
-func PrepareStuckWithdrawEnclaveCall(ctx context.Context, uk *cryptokeys.UserKeys, params PrepareStuckWithdrawParams) ([]types.PreparedJobType, error) {
+func PrepareStuckWithdrawEnclaveCall(ctx context.Context, uk *cryptokeys.UserKeys, params PrepareStuckWithdrawParams) ([]types.PreparedStuckWithdrawJobType, error) {
 	nullifyingKey, err := uk.GetShieldedPrivateKey()
 	if err != nil {
 		return nil, err
@@ -210,12 +237,17 @@ func PrepareStuckWithdrawEnclaveCall(ctx context.Context, uk *cryptokeys.UserKey
 		NullifyingKey:         nullifyingKey,
 		SpendingPublicKey:     [2]string{pair.PubSpendingBJJPoint[0].String(), pair.PubSpendingBJJPoint[1].String()},
 	}
-	resp, err := enclavePost[types.PrepareStuckWithdrawResponseType](ctx, constants.EnclaveConfig.PrepareStuckWithdraw, payload)
+	resp, err := enclavePostSealedSigned[types.PrepareStuckWithdrawResponseType](ctx, constants.EnclaveConfig.PrepareStuckWithdraw, payload)
 	if err != nil {
 		return nil, err
 	}
 	if err := assertPrepareStuckWithdrawEchoMatches(payload, resp.Request); err != nil {
 		return nil, err
+	}
+	for _, job := range resp.Jobs {
+		if err := verifyStuckWithdrawJobSignedMessageHash(params.ChainID, hinkalAddress, params.Erc20Address, params.Relay, params.ExternalAddress, params.FeeStructure, nullifyingKey, payload.SpendingPublicKey, job); err != nil {
+			return nil, err
+		}
 	}
 	return resp.Jobs, nil
 }

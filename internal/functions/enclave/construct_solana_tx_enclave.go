@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"strconv"
 
 	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
 	cryptokeys "github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/crypto-keys"
+	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/utils"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/types"
 )
 
@@ -141,11 +143,14 @@ func PrepareSolanaTxEnclaveCall(
 	spendingPublicKey := [2]string{pair.PubSpendingBJJPoint[0].String(), pair.PubSpendingBJJPoint[1].String()}
 	payload := buildPrepareSolanaTxRequest(params, nullifyingKey, spendingPublicKey)
 
-	resp, err := enclavePost[types.PrepareSolanaTxResponseType](ctx, constants.EnclaveConfig.PrepareSolanaTx, payload)
+	resp, err := enclavePostSealedSigned[types.PrepareSolanaTxResponseType](ctx, constants.EnclaveConfig.PrepareSolanaTx, payload)
 	if err != nil {
 		return types.PrepareSolanaTxResponseType{}, err
 	}
 	if err := assertPrepareSolanaTxEchoMatches(payload, resp.Request); err != nil {
+		return types.PrepareSolanaTxResponseType{}, err
+	}
+	if err := verifyPrepareSolanaTxResponse(payload, resp); err != nil {
 		return types.PrepareSolanaTxResponseType{}, err
 	}
 	return resp, nil
@@ -210,7 +215,7 @@ func PrepareSolanaStuckWithdrawEnclaveCall(
 	ctx context.Context,
 	uk *cryptokeys.UserKeys,
 	params types.PrepareSolanaStuckWithdrawParams,
-) ([]types.PreparedJobType, error) {
+) ([]types.PreparedStuckWithdrawJobType, error) {
 	nullifyingKey, err := uk.GetShieldedPrivateKey()
 	if err != nil {
 		return nil, err
@@ -239,12 +244,31 @@ func PrepareSolanaStuckWithdrawEnclaveCall(
 		SpendingPublicKey:     [2]string{pair.PubSpendingBJJPoint[0].String(), pair.PubSpendingBJJPoint[1].String()},
 	}
 
-	resp, err := enclavePost[types.PrepareSolanaStuckWithdrawResponseType](ctx, constants.EnclaveConfig.PrepareSolanaStuckWithdraw, payload)
+	resp, err := enclavePostSealedSigned[types.PrepareSolanaStuckWithdrawResponseType](ctx, constants.EnclaveConfig.PrepareSolanaStuckWithdraw, payload)
 	if err != nil {
 		return nil, err
 	}
 	if err := assertPrepareSolanaStuckWithdrawEchoMatches(payload, resp.Request); err != nil {
 		return nil, err
+	}
+	for _, job := range resp.Jobs {
+		nullifierCount := 0
+		for _, amount := range job.InAmounts[0] {
+			v, err := utils.ParseBigInt(amount)
+			if err != nil {
+				return nil, err
+			}
+			if v.Sign() > 0 {
+				nullifierCount++
+			}
+		}
+		feeStructure, ok := params.FeeStructures[strconv.Itoa(nullifierCount)]
+		if !ok {
+			return nil, fmt.Errorf("enclave: no feeStructure supplied for nullifierCount %d", nullifierCount)
+		}
+		if err := verifySolanaStuckWithdrawJobSignedMessageHash(params.MintAddress, params.RelayAddress, params.Recipient, feeStructure, nullifyingKey, payload.SpendingPublicKey, job); err != nil {
+			return nil, err
+		}
 	}
 	return resp.Jobs, nil
 }

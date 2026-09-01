@@ -109,6 +109,37 @@ type PreparedJobType struct {
 	SignedMessageHash string `json:"signedMessageHash"`
 }
 
+// The data behind SignedMessageHash - shared across every prepare route since they all build the
+// job the same way server-side.
+type EnclaveWitnessPreimage struct {
+	RootHashHinkal string `json:"rootHashHinkal"`
+	OutTimeStamp   string `json:"outTimeStamp"`
+	OutH1Ax        string `json:"outH1Ax"`
+	OutH1Ay        string `json:"outH1Ay"`
+	H0Ax           string `json:"h0Ax"`
+	H0Ay           string `json:"h0Ay"`
+
+	OutAmounts  [][]string `json:"outAmounts"`
+	OutNoteH0Ax [][]string `json:"outNoteH0Ax"`
+	OutNoteH0Ay [][]string `json:"outNoteH0Ay"`
+
+	MessageSeed            string     `json:"messageSeed"`
+	EncryptedOutputs       [][]string `json:"encryptedOutputs"`
+	OnChainEncryptedOutput string     `json:"onChainEncryptedOutput"`
+
+	InAmounts    [][]string `json:"inAmounts"`
+	InH0Ax       [][]string `json:"inH0Ax"`
+	InH0Ay       [][]string `json:"inH0Ay"`
+	InTimeStamps [][]string `json:"inTimeStamps"`
+}
+
+// dimensions is present but zero-valued for EVM jobs - only Solana jobs populate it.
+type PreparedStuckWithdrawJobType struct {
+	PreparedJobType
+	EnclaveWitnessPreimage
+	Dimensions DimDataType `json:"dimensions"`
+}
+
 type PrepareSolanaTxInstruction struct {
 	AccountIndexes []int `json:"accountIndexes"`
 	Data           []int `json:"data"`
@@ -200,11 +231,14 @@ type EchoedPrepareSolanaTxRequestType struct {
 
 type PrepareSolanaTxResponseType struct {
 	PreparedJobType
-	Request EchoedPrepareSolanaTxRequestType `json:"request"`
+	EnclaveWitnessPreimage
+	Request    EchoedPrepareSolanaTxRequestType `json:"request"`
+	Dimensions DimDataType                      `json:"dimensions"`
 }
 
 type PrepareTxResponseType struct {
 	PreparedJobType
+	EnclaveWitnessPreimage
 	Request EchoedPrepareTxRequestType `json:"request"`
 }
 
@@ -242,7 +276,7 @@ type EchoedPrepareSolanaStuckWithdrawRequestType struct {
 }
 
 type PrepareSolanaStuckWithdrawResponseType struct {
-	Jobs    []PreparedJobType                           `json:"jobs"`
+	Jobs    []PreparedStuckWithdrawJobType              `json:"jobs"`
 	Request EchoedPrepareSolanaStuckWithdrawRequestType `json:"request"`
 }
 
@@ -269,7 +303,7 @@ type EchoedPrepareStuckWithdrawRequestType struct {
 }
 
 type PrepareStuckWithdrawResponseType struct {
-	Jobs    []PreparedJobType                     `json:"jobs"`
+	Jobs    []PreparedStuckWithdrawJobType        `json:"jobs"`
 	Request EchoedPrepareStuckWithdrawRequestType `json:"request"`
 }
 
