@@ -193,7 +193,7 @@ func hinkalShieldBridgedFunds(
 		}
 		calls[i] = call
 	}
-	feeStructure, err := pretransaction.GetFeeStructure(ctx, destChainID, destTokenAddress, []string{destTokenAddress}, types.ExternalActionEmporium, calls, constants.PaySendVariableRate(), nil)
+	feeStructure, err := pretransaction.GetFeeStructure(ctx, destChainID, destTokenAddress, []string{destTokenAddress}, types.ExternalActionEmporium, calls, constants.HinkalPrivateSendVariableRate(), nil)
 	if err != nil {
 		return "", nil, err
 	}

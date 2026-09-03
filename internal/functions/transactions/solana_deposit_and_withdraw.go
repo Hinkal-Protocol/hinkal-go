@@ -38,7 +38,7 @@ func resolveSolanaDepositAndWithdrawFeeStructure(
 		[]string{mintAddress},
 		types.ExternalActionTransact,
 		nil,
-		constants.HinkalPrivateSendVariableRate(),
+		constants.PaySendVariableRate(),
 		solanaTransactionParams,
 	)
 	if err != nil {

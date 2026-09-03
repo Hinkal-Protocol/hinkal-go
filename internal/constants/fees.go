@@ -21,8 +21,8 @@ func NonNativeGasCostTokenSymbolOptions(chainID int) []string {
 
 func TwentyPercentBPS() *big.Int              { return big.NewInt(2000) }
 func BPSDenominator() *big.Int                { return big.NewInt(10000) }
-func PaySendVariableRate() *big.Int           { return big.NewInt(10) }
-func HinkalPrivateSendVariableRate() *big.Int { return big.NewInt(5) }
+func PaySendVariableRate() *big.Int           { return big.NewInt(25) }
+func HinkalPrivateSendVariableRate() *big.Int { return big.NewInt(25) }
 func HinkalSwapVariableRate() *big.Int        { return big.NewInt(35) }
 
 const (

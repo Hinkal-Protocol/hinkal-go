@@ -60,7 +60,7 @@ func buildNearBridgeFeeStructure(
 		[]string{token.Erc20TokenAddress},
 		types.ExternalActionTransact,
 		[]types.CallInfo{},
-		constants.HinkalPrivateSendVariableRate(),
+		constants.PaySendVariableRate(),
 		&api.SolanaGasEstimateParams{
 			MintTo:         token.Erc20TokenAddress,
 			Recipient:      recipient,

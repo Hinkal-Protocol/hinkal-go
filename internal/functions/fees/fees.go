@@ -92,14 +92,10 @@ func crossTokenVariableFee(
 	feeStructure types.FeeStructure,
 	feeToken types.ERC20Token,
 ) (*big.Int, error) {
-	resp, err := api.GetTokenPrices(ctx, chainID, []string{amountToken.Erc20TokenAddress, feeToken.Erc20TokenAddress})
+	amountTokenPrice, feeTokenPrice, err := tokenPricePair(ctx, chainID, amountToken, feeToken)
 	if err != nil {
 		return nil, err
 	}
-	if len(resp.Prices) < 2 || resp.Prices[0] == 0 || resp.Prices[1] == 0 {
-		return nil, errFailedTokenPrices
-	}
-	amountTokenPrice, feeTokenPrice := resp.Prices[0], resp.Prices[1]
 
 	amountInToken, err := strconv.ParseFloat(web3.GetAmountInToken(amountToken, amount), 64)
 	if err != nil {
@@ -109,6 +105,37 @@ func crossTokenVariableFee(
 	variableFeeUsd := amountValueUsd * float64(feeStructure.VariableRate.Int64()) / float64(constants.BPSDenominator().Int64())
 	weiInput := strconv.FormatFloat(variableFeeUsd/feeTokenPrice, 'f', feeToken.Decimals, 64)
 	return web3.GetAmountInWei(feeToken, weiInput)
+}
+
+func tokenPricePair(
+	ctx context.Context,
+	chainID int,
+	amountToken types.ERC20Token,
+	feeToken types.ERC20Token,
+) (float64, float64, error) {
+	if amountToken.ChainID == chainID {
+		resp, err := api.GetTokenPrices(ctx, chainID, []string{amountToken.Erc20TokenAddress, feeToken.Erc20TokenAddress})
+		if err != nil {
+			return 0, 0, err
+		}
+		if len(resp.Prices) < 2 || resp.Prices[0] == 0 || resp.Prices[1] == 0 {
+			return 0, 0, errFailedTokenPrices
+		}
+		return resp.Prices[0], resp.Prices[1], nil
+	}
+
+	amountResp, err := api.GetTokenPrices(ctx, amountToken.ChainID, []string{amountToken.Erc20TokenAddress})
+	if err != nil {
+		return 0, 0, err
+	}
+	feeResp, err := api.GetTokenPrices(ctx, chainID, []string{feeToken.Erc20TokenAddress})
+	if err != nil {
+		return 0, 0, err
+	}
+	if len(amountResp.Prices) == 0 || len(feeResp.Prices) == 0 || amountResp.Prices[0] == 0 || feeResp.Prices[0] == 0 {
+		return 0, 0, errFailedTokenPrices
+	}
+	return amountResp.Prices[0], feeResp.Prices[0], nil
 }
 
 func CalculateWithdrawalAmount(amountWithFee *big.Int, feeStructure types.FeeStructure) *big.Int {
