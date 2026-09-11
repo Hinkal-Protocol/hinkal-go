@@ -23,7 +23,7 @@ for (const family of ['evm', 'tron']) {
   const converted = {};
   // Not every family ships every contract (e.g. Tron has no HinkalWrapper), so only
   // convert the ABIs that are actually present.
-  for (const key of ['hinkalABI', 'hinkalWrapperABI']) {
+  for (const key of ['hinkalABI', 'hinkalWrapperABI', 'receiveVaultFactoryABI']) {
     if (shared[key]) converted[key] = toJsonAbi(shared[key]);
   }
   writeJson(path.join(GO_DEPLOY_DATA, `shared-deploy-data-${family}.json`), converted);

@@ -35,6 +35,7 @@ type IHinkal interface {
 
 	InitUserKeys(ctx context.Context, mode types.LoginMessageMode) error
 	InitUserKeysWithSignature(signature string)
+	InitUserKeysWithNullifyingKey(nullifyingKey string)
 	InitUserKeysFromSeedPhrases(seedPhrases []string) error
 	StoreAndGetInitialSignature(ctx context.Context, authSignature string) (string, error)
 	SignMessage(ctx context.Context, message string) (string, error)
@@ -55,6 +56,7 @@ type IHinkal interface {
 	GetSolanaPublicKey(ctx context.Context) (solana.PublicKey, error)
 	GetRecipientInfo() (string, error)
 	GetShieldedPublicKey() (string, error)
+	GetNullifyingKey() (string, error)
 	GetTotalBalances(ctx context.Context, chainIDs []int, userKeys *cryptokeys.UserKeys, ethAddress string, resetCacheBefore, useBlockedUtxos bool) (map[int][]types.TokenBalance, error)
 	GetTotalBalance(ctx context.Context, chainID int, userKeys *cryptokeys.UserKeys, ethAddress string, resetCacheBefore, useBlockedUtxos bool) ([]types.TokenBalance, error)
 	GetStuckShieldedBalances(ctx context.Context, chainIDs []int, userKeys *cryptokeys.UserKeys, ethAddress string) (map[int][]types.TokenBalance, error)
@@ -63,7 +65,7 @@ type IHinkal interface {
 	Deposit(ctx context.Context, chainID int, erc20Addresses []string, amountChanges []*big.Int, preEstimateGas, returnTxData bool) (types.TransactionRequest, string, error)
 	DepositForOther(ctx context.Context, chainID int, erc20Addresses []string, amountChanges []*big.Int, recipientInfo string, preEstimateGas, returnTxData bool) (types.TransactionRequest, string, error)
 	DepositSolana(ctx context.Context, chainID int, erc20Address string, amount *big.Int, returnTxData bool) (string, error)
-	DepositSolanaForOther(ctx context.Context, chainID int, erc20Address string, amount *big.Int, recipientInfo string, returnTxData bool) (string, error)
+	DepositSolanaForOther(ctx context.Context, chainID int, erc20Address string, amount *big.Int, recipientInfo string, returnTxData bool, variableRate *big.Int) (string, error)
 	ProoflessDeposit(ctx context.Context, chainID int, erc20Addresses []string, amountChanges []*big.Int, stealthAddressStructures []types.StealthAddressStructure, recipientEncryptionKeysOverride []string, createBlockedUtxos bool, feeStructure types.ProoflessFeeStructure, orderID string, returnTxData bool) (types.TransactionRequest, string, error)
 	Transfer(ctx context.Context, chainID int, erc20Addresses []string, amountChanges []*big.Int, recipientAddress string, feeToken string, feeStructureOverride *types.FeeStructure) (string, error)
 	DepositAndWithdraw(ctx context.Context, chainID int, erc20Address string, recipientAmounts []*big.Int, recipientAddresses []string, txCompletionTime *int, feeStructureOverride *types.FeeStructure, preEstimateGas bool) (types.DepositAndSendExtendedResult, error)
@@ -71,6 +73,9 @@ type IHinkal interface {
 	NearDepositAndBridge(ctx context.Context, chainID int, erc20Address string, recipientAmounts []*big.Int, recipientAddresses []string, params types.NearBridgeParams, txCompletionTime *int, feeStructureOverride *types.FeeStructure) (types.NearBridgeResult, error)
 	CheckSendTransactionStatus(ctx context.Context, scheduleID string) (types.ScheduledTransactionByIDResponse, error)
 	WithdrawStuckUtxos(ctx context.Context, chainID int, erc20Address string, recipientAddress string) ([]string, error)
+	CreateReceiveAddress(ctx context.Context, chainID int, forceFresh ...bool) (types.ReceiveVaultRecord, error)
+	GetReceiveVaultAccount(ctx context.Context) (types.ReceiveVaultAccount, error)
+	RecoverReceiveVault(ctx context.Context, record types.ReceiveVaultRecord, token string, to string, returnTxData bool, chainID int) (types.TransactionRequest, string, error)
 	ClaimUtxo(ctx context.Context, chainID int, erc20Address string, claimableUtxo *utxo.Utxo, feeStructureOverride *types.FeeStructure, claimableSignature string) (string, error)
 	Withdraw(ctx context.Context, chainID int, erc20Addresses []string, amountChanges []*big.Int, recipientAddress string, isRelayerOff bool, feeToken string, feeStructureOverride *types.FeeStructure) (types.TransactionRequest, string, error)
 	Swap(ctx context.Context, chainID int, erc20Addresses []string, deltaAmounts []*big.Int, externalActionID types.ExternalActionID, swapData string, feeToken string, feeStructureOverride *types.FeeStructure) (string, error)

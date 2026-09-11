@@ -1,4 +1,5 @@
 {
   "hinkalAddress": "0x2bf3af0ffb6f0b8cdc649d11c91953f700733b17",
-  "hinkalHelperAddress": "0xef3b0c95e5a235ac8d5d4545eee02cf41b572459"
+  "hinkalHelperAddress": "0xef3b0c95e5a235ac8d5d4545eee02cf41b572459",
+  "receiveVaultFactoryAddress": "0x4e902cc11fc11e47a767c778c6b1d6a5117af140"
 }

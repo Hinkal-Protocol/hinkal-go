@@ -13,6 +13,7 @@ import (
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/integrations"
 	onchain "github.com/Hinkal-Protocol/hinkal-go/internal/functions/onchainutxos"
 	pretx "github.com/Hinkal-Protocol/hinkal-go/internal/functions/pre-transaction"
+	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/receivevault"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/web3"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/providers"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/signers"
@@ -76,6 +77,11 @@ type (
 	ScheduledTransactionItemStatus   = types.ScheduledTransactionItemStatus
 	ScheduledTransactionStatus       = types.ScheduledTransactionStatus
 
+	ReceiveVaultRecord      = types.ReceiveVaultRecord
+	ReceiveVaultAccount     = types.ReceiveVaultAccount
+	ReceiveVaultBlockedFund = types.ReceiveVaultBlockedFund
+	ReceiveVaultBlockReason = types.ReceiveVaultBlockReason
+
 	ICacheDevice     = types.ICacheDevice
 	IProviderAdapter = types.IProviderAdapter
 
@@ -90,6 +96,13 @@ var (
 	StoreClaimableKeyInEnclave = enclave.StoreClaimableKeyInEnclave
 	GetUtxosFromEnclave        = enclave.GetUtxosFromEnclave
 )
+
+const (
+	ReceiveVaultBlockRiskySender   = types.ReceiveVaultBlockRiskySender
+	ReceiveVaultBlockNotShieldable = types.ReceiveVaultBlockNotShieldable
+)
+
+var IsReceiveVaultSupported = receivevault.IsReceiveVaultSupported
 
 const (
 	ScheduledTransactionStatusPending           = types.ScheduledTransactionStatusPending

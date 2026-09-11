@@ -12,6 +12,7 @@ const (
 	ExternalActionWallet              ExternalActionID = "Wallet"
 	ExternalActionDepositOnChainUtxos ExternalActionID = "DepositOnChainUtxos"
 	ExternalActionProofLess           ExternalActionID = "ProofLess"
+	ExternalActionReceiveVaultSettle  ExternalActionID = "ReceiveVaultSettle"
 )
 
 type ExternalActionData struct {

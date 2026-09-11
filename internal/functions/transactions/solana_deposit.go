@@ -9,8 +9,6 @@ import (
 	"log"
 	"math"
 	"math/big"
-	"strings"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	bin "github.com/gagliardetto/binary"
@@ -29,6 +27,7 @@ import (
 	errorhandling "github.com/Hinkal-Protocol/hinkal-go/internal/error-handling"
 	pretransaction "github.com/Hinkal-Protocol/hinkal-go/internal/functions/pre-transaction"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/snarkjs"
+	solanautils "github.com/Hinkal-Protocol/hinkal-go/internal/functions/solana"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/utils"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/web3"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/types"
@@ -51,8 +50,6 @@ var (
 	errSolanaProoflessOneMint          = errors.New("Solana prooflessDeposit supports one mint per transaction")
 	multiPaymentDepositAtDiscrim       = []byte{20, 97, 177, 53, 252, 2, 24, 176}
 )
-
-const solanaBlockheightExpiredRetryCount = 10
 
 func validateSolanaDepositArgs(amounts []*big.Int, structures []types.StealthAddressStructure) error {
 	if len(amounts) == 0 {
@@ -355,47 +352,6 @@ func buildSolanaDepositTransaction(
 	)
 }
 
-func shouldRetrySolanaSendError(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "blockhash not found") ||
-		strings.Contains(msg, "blockhashnotfound") ||
-		strings.Contains(msg, "transactionexpiredblockheightexceedederror") ||
-		strings.Contains(msg, "block height exceeded")
-}
-
-const solanaConfirmationPollInterval = 500 * time.Millisecond
-
-var errSolanaConfirmationTimeout = errors.New("transactions: Solana transaction confirmation timed out")
-
-func waitForSolanaConfirmation(ctx context.Context, connection *rpc.Client, signature solana.Signature, lastValidBlockHeight uint64) error {
-	for {
-		height, err := connection.GetBlockHeight(ctx, rpc.CommitmentConfirmed)
-		if err == nil && height > lastValidBlockHeight {
-			return errSolanaConfirmationTimeout
-		}
-
-		statuses, err := connection.GetSignatureStatuses(ctx, false, signature)
-		if err == nil && len(statuses.Value) > 0 && statuses.Value[0] != nil {
-			status := statuses.Value[0]
-			if status.Err != nil {
-				return fmt.Errorf("transactions: Solana transaction failed: %v", status.Err)
-			}
-			if status.ConfirmationStatus == rpc.ConfirmationStatusConfirmed || status.ConfirmationStatus == rpc.ConfirmationStatusFinalized {
-				return nil
-			}
-		}
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(solanaConfirmationPollInterval):
-		}
-	}
-}
-
 func signAndSendSolanaInstructions(
 	ctx context.Context,
 	hinkal ihinkal.HinkalInternal,
@@ -409,31 +365,13 @@ func signAndSendSolanaInstructions(
 		return "", err
 	}
 
-	for i := 0; i < solanaBlockheightExpiredRetryCount; i++ {
-		latest, err := connection.GetLatestBlockhash(ctx, rpc.CommitmentConfirmed)
-		if err != nil {
-			return "", err
-		}
-		tx, err := solana.NewTransaction(withSolanaComputeBudget(ctx, connection, signer, instructions), latest.Value.Blockhash, solana.TransactionPayer(signer))
-		if err != nil {
-			return "", err
-		}
-
-		signature, err := program.SignAndSend(ctx, tx)
-		if err == nil {
-			if confirmErr := waitForSolanaConfirmation(ctx, connection, signature, latest.Value.LastValidBlockHeight); confirmErr != nil {
-				if i == solanaBlockheightExpiredRetryCount-1 || !shouldRetrySolanaSendError(confirmErr) {
-					return "", confirmErr
-				}
-				continue
-			}
-			return signature.String(), nil
-		}
-		if i == solanaBlockheightExpiredRetryCount-1 || !shouldRetrySolanaSendError(err) {
-			return "", err
-		}
-	}
-	return "", errors.New("transactions: Solana deposit failed")
+	return solanautils.SignAndConfirm(ctx, connection, program, func(blockhash solana.Hash) (*solana.Transaction, error) {
+		return solana.NewTransaction(
+			withSolanaComputeBudget(ctx, connection, signer, instructions),
+			blockhash,
+			solana.TransactionPayer(signer),
+		)
+	})
 }
 
 // sendSolanaInstructions signs and broadcasts without waiting for confirmation, so a dependent
@@ -539,6 +477,7 @@ func HinkalSolanaProoflessDepositWithPublicFee(
 	structures []types.StealthAddressStructure,
 	recipientEncryptionKeys []string,
 	feeAmount *big.Int,
+	returnTxData bool,
 ) (string, error) {
 	if err := validateSolanaDepositArgs(amounts, structures); err != nil {
 		return "", err
@@ -599,6 +538,19 @@ func HinkalSolanaProoflessDepositWithPublicFee(
 	instructions := make([]solana.Instruction, 0, len(feeInstructions)+1)
 	instructions = append(instructions, feeInstructions...)
 	instructions = append(instructions, depositInstruction)
+
+	if returnTxData {
+		tx, err := buildSolanaDepositTransaction(ctx, connection, signer, instructions)
+		if err != nil {
+			return "", err
+		}
+		raw, err := tx.MarshalBinary()
+		if err != nil {
+			return "", err
+		}
+		return base64.StdEncoding.EncodeToString(raw), nil
+	}
+
 	signature, err := signAndSendSolanaInstructions(ctx, hinkal, programID, connection, signer, instructions)
 	if err != nil {
 		return "", err
@@ -706,6 +658,7 @@ func HinkalSolanaDepositForOther(
 	token types.ERC20Token,
 	recipientInfo string,
 	returnTxData bool,
+	variableRate *big.Int,
 ) (string, error) {
 	if !pretransaction.IsValidPrivateAddress(recipientInfo) {
 		return "", errorhandling.ErrRecipientFormatIncorrect
@@ -718,7 +671,14 @@ func HinkalSolanaDepositForOther(
 	if err != nil {
 		return "", err
 	}
-	result, err := SubmitSolanaProoflessDeposit(ctx, hinkal, token, []*big.Int{amount}, []types.StealthAddressStructure{structure}, []string{encryptionKey}, returnTxData)
+
+	feeAmount := big.NewInt(0)
+	if variableRate != nil && variableRate.Sign() > 0 {
+		feeAmount = new(big.Int).Mul(amount, variableRate)
+		feeAmount.Div(feeAmount, big.NewInt(constants.BpsDenominator))
+	}
+
+	result, err := HinkalSolanaProoflessDepositWithPublicFee(ctx, hinkal, token, []*big.Int{amount}, []types.StealthAddressStructure{structure}, []string{encryptionKey}, feeAmount, returnTxData)
 	if err != nil {
 		return "", err
 	}

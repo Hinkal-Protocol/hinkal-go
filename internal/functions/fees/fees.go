@@ -160,6 +160,38 @@ func CalculateGrossAmountWithFee(netAmount *big.Int, feeStructure types.FeeStruc
 	return numerator.Quo(numerator, denominator)
 }
 
+func divideRoundingUp(dividend, divisor *big.Int) *big.Int {
+	quotient, remainder := new(big.Int), new(big.Int)
+	quotient.QuoRem(dividend, divisor, remainder)
+	if remainder.Sign() != 0 {
+		quotient.Add(quotient, big.NewInt(1))
+	}
+	return quotient
+}
+
+// CalculateVariableFeeGrossUp returns the extra amount to add to sumAbs so Hinkal.sol's
+// on-chain variableRate cut still leaves the recipient with netAmount.
+func CalculateVariableFeeGrossUp(netAmount *big.Int, variableRate *big.Int) *big.Int {
+	if netAmount.Sign() <= 0 || variableRate.Sign() <= 0 {
+		return big.NewInt(0)
+	}
+	denominator := new(big.Int).Sub(constants.BPSDenominator(), variableRate)
+	return divideRoundingUp(new(big.Int).Mul(netAmount, variableRate), denominator)
+}
+
+// CalculateGrossUtxoAmounts returns the UTXO amount to deposit per recipient, and their sum,
+// so a later on-chain withdraw leaves each recipient their full requested amount.
+func CalculateGrossUtxoAmounts(recipientAmounts []*big.Int, feeStructure types.FeeStructure) ([]*big.Int, *big.Int) {
+	utxoAmounts := make([]*big.Int, len(recipientAmounts))
+	totalAmount := new(big.Int)
+	for i, amount := range recipientAmounts {
+		grossUp := CalculateVariableFeeGrossUp(amount, feeStructure.VariableRate)
+		utxoAmounts[i] = new(big.Int).Add(new(big.Int).Add(amount, grossUp), feeStructure.FlatFee)
+		totalAmount.Add(totalAmount, utxoAmounts[i])
+	}
+	return utxoAmounts, totalAmount
+}
+
 func containsString(values []string, target string) bool {
 	for _, v := range values {
 		if v == target {

@@ -375,6 +375,20 @@
     },
     {
       "type": "function",
+      "name": "poseidon4",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [],
+      "outputs": [
+        {
+          "type": "address",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
       "name": "m_index",
       "constant": true,
       "stateMutability": "view",
@@ -819,6 +833,914 @@
           "name": ""
         }
       ]
+    }
+  ],
+  "receiveVaultFactoryABI": [
+    {
+      "type": "constructor",
+      "stateMutability": "undefined",
+      "payable": false,
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "BadRecoverySignature",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "DepositMismatch",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InvalidVersion",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "NotARelayer",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "NothingToSettle",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "PartialSweep",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "RecoveryAlreadyUsed",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "RecoveryExpired",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "VaultInitCodeChanged",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "ZeroChainUid",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "ZeroHinkal",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "ZeroOwner",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "ZeroPoseidon",
+      "inputs": []
+    },
+    {
+      "type": "event",
+      "anonymous": false,
+      "name": "AdminChanged",
+      "inputs": [
+        {
+          "type": "address",
+          "name": "previousAdmin"
+        },
+        {
+          "type": "address",
+          "name": "newAdmin"
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "anonymous": false,
+      "name": "BeaconUpgraded",
+      "inputs": [
+        {
+          "type": "address",
+          "name": "beacon",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "anonymous": false,
+      "name": "HinkalSet",
+      "inputs": [
+        {
+          "type": "address",
+          "name": "hinkal",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "anonymous": false,
+      "name": "Initialized",
+      "inputs": [
+        {
+          "type": "uint8",
+          "name": "version"
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "anonymous": false,
+      "name": "OwnershipTransferStarted",
+      "inputs": [
+        {
+          "type": "address",
+          "name": "previousOwner",
+          "indexed": true
+        },
+        {
+          "type": "address",
+          "name": "newOwner",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "anonymous": false,
+      "name": "OwnershipTransferred",
+      "inputs": [
+        {
+          "type": "address",
+          "name": "previousOwner",
+          "indexed": true
+        },
+        {
+          "type": "address",
+          "name": "newOwner",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "anonymous": false,
+      "name": "ReceiveVaultRecovered",
+      "inputs": [
+        {
+          "type": "address",
+          "name": "vault",
+          "indexed": true
+        },
+        {
+          "type": "address",
+          "name": "token",
+          "indexed": true
+        },
+        {
+          "type": "address",
+          "name": "to"
+        },
+        {
+          "type": "uint256",
+          "name": "amount"
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "anonymous": false,
+      "name": "ReceiveVaultSettled",
+      "inputs": [
+        {
+          "type": "address",
+          "name": "vault",
+          "indexed": true
+        },
+        {
+          "type": "address",
+          "name": "token",
+          "indexed": true
+        },
+        {
+          "type": "uint256",
+          "name": "depositAmount"
+        },
+        {
+          "type": "uint256",
+          "name": "relayFee"
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "anonymous": false,
+      "name": "Upgraded",
+      "inputs": [
+        {
+          "type": "address",
+          "name": "implementation",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "anonymous": false,
+      "name": "VaultInitCodeHashSet",
+      "inputs": [
+        {
+          "type": "uint256",
+          "name": "version",
+          "indexed": true
+        },
+        {
+          "type": "bytes32",
+          "name": "vaultInitCodeHash",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "acceptOwnership",
+      "constant": false,
+      "payable": false,
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "type": "function",
+      "name": "addVaultVersion",
+      "constant": false,
+      "payable": false,
+      "inputs": [
+        {
+          "type": "bytes",
+          "name": "creationCode"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "uint256",
+          "name": "version"
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "chainUid",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [],
+      "outputs": [
+        {
+          "type": "uint256",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "hinkal",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [],
+      "outputs": [
+        {
+          "type": "address",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "hinkalHelper",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [],
+      "outputs": [
+        {
+          "type": "address",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "initialize",
+      "constant": false,
+      "payable": false,
+      "inputs": [
+        {
+          "type": "address",
+          "name": "initialOwner"
+        },
+        {
+          "type": "address",
+          "name": "_hinkal"
+        },
+        {
+          "type": "uint256",
+          "name": "_chainUid"
+        },
+        {
+          "type": "address",
+          "name": "_poseidon4"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "type": "function",
+      "name": "owner",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [],
+      "outputs": [
+        {
+          "type": "address",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "pendingOwner",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [],
+      "outputs": [
+        {
+          "type": "address",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "poseidon4",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [],
+      "outputs": [
+        {
+          "type": "address",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "proxiableUUID",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [],
+      "outputs": [
+        {
+          "type": "bytes32",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "recover",
+      "constant": false,
+      "payable": false,
+      "inputs": [
+        {
+          "type": "tuple",
+          "name": "params",
+          "components": [
+            {
+              "type": "tuple",
+              "name": "recipient",
+              "components": [
+                {
+                  "type": "uint256",
+                  "name": "H0x"
+                },
+                {
+                  "type": "uint256",
+                  "name": "H0y"
+                },
+                {
+                  "type": "uint256",
+                  "name": "H1x"
+                },
+                {
+                  "type": "uint256",
+                  "name": "H1y"
+                },
+                {
+                  "type": "uint256",
+                  "name": "stealthAddress"
+                }
+              ]
+            },
+            {
+              "type": "address",
+              "name": "owner"
+            },
+            {
+              "type": "uint256",
+              "name": "version"
+            }
+          ]
+        },
+        {
+          "type": "address",
+          "name": "token"
+        },
+        {
+          "type": "address",
+          "name": "to"
+        },
+        {
+          "type": "uint256",
+          "name": "deadline"
+        },
+        {
+          "type": "bytes",
+          "name": "signature"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "type": "function",
+      "name": "recoveryDigest",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [
+        {
+          "type": "address",
+          "name": "vault"
+        },
+        {
+          "type": "address",
+          "name": "token"
+        },
+        {
+          "type": "address",
+          "name": "to"
+        },
+        {
+          "type": "uint256",
+          "name": "deadline"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "bytes32",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "recoveryUsed",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [
+        {
+          "type": "bytes32",
+          "name": "digest"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "bool",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "renounceOwnership",
+      "constant": false,
+      "payable": false,
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "type": "function",
+      "name": "setHinkal",
+      "constant": false,
+      "payable": false,
+      "inputs": [
+        {
+          "type": "address",
+          "name": "_hinkal"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "type": "function",
+      "name": "settle",
+      "constant": false,
+      "payable": false,
+      "inputs": [
+        {
+          "type": "tuple",
+          "name": "params",
+          "components": [
+            {
+              "type": "tuple",
+              "name": "recipient",
+              "components": [
+                {
+                  "type": "uint256",
+                  "name": "H0x"
+                },
+                {
+                  "type": "uint256",
+                  "name": "H0y"
+                },
+                {
+                  "type": "uint256",
+                  "name": "H1x"
+                },
+                {
+                  "type": "uint256",
+                  "name": "H1y"
+                },
+                {
+                  "type": "uint256",
+                  "name": "stealthAddress"
+                }
+              ]
+            },
+            {
+              "type": "address",
+              "name": "owner"
+            },
+            {
+              "type": "uint256",
+              "name": "version"
+            }
+          ]
+        },
+        {
+          "type": "address",
+          "name": "token"
+        },
+        {
+          "type": "uint256",
+          "name": "depositAmount"
+        },
+        {
+          "type": "uint256",
+          "name": "relayFee"
+        },
+        {
+          "type": "tuple",
+          "name": "proof",
+          "components": [
+            {
+              "type": "tuple",
+              "name": "proofSignature",
+              "components": [
+                {
+                  "type": "uint8",
+                  "name": "v"
+                },
+                {
+                  "type": "bytes32",
+                  "name": "r"
+                },
+                {
+                  "type": "bytes32",
+                  "name": "s"
+                }
+              ]
+            },
+            {
+              "type": "uint256[2]",
+              "name": "a"
+            },
+            {
+              "type": "uint256[2][2]",
+              "name": "b"
+            },
+            {
+              "type": "uint256[2]",
+              "name": "c"
+            },
+            {
+              "type": "tuple",
+              "name": "dimensions",
+              "components": [
+                {
+                  "type": "uint16",
+                  "name": "tokenNumber"
+                },
+                {
+                  "type": "uint16",
+                  "name": "nullifierAmount"
+                },
+                {
+                  "type": "uint16",
+                  "name": "outputAmount"
+                }
+              ]
+            },
+            {
+              "type": "tuple",
+              "name": "circomData",
+              "components": [
+                {
+                  "type": "uint256",
+                  "name": "rootHashHinkal"
+                },
+                {
+                  "type": "uint256",
+                  "name": "rootHashHinkalIndex"
+                },
+                {
+                  "type": "address[]",
+                  "name": "erc20TokenAddresses"
+                },
+                {
+                  "type": "int256[]",
+                  "name": "amountChanges"
+                },
+                {
+                  "type": "uint256",
+                  "name": "newRootHash"
+                },
+                {
+                  "type": "uint256[][]",
+                  "name": "inputNullifiers"
+                },
+                {
+                  "type": "uint256[][]",
+                  "name": "outCommitments"
+                },
+                {
+                  "type": "bytes[][]",
+                  "name": "encryptedOutputs"
+                },
+                {
+                  "type": "int256[]",
+                  "name": "slippageValues"
+                },
+                {
+                  "type": "tuple",
+                  "name": "feeStructure",
+                  "components": [
+                    {
+                      "type": "address",
+                      "name": "feeToken"
+                    },
+                    {
+                      "type": "uint256",
+                      "name": "flatFee"
+                    },
+                    {
+                      "type": "uint256",
+                      "name": "variableRate"
+                    }
+                  ]
+                },
+                {
+                  "type": "uint256",
+                  "name": "timeStamp"
+                },
+                {
+                  "type": "uint256",
+                  "name": "calldataHash"
+                },
+                {
+                  "type": "uint256",
+                  "name": "emporiumMessage"
+                },
+                {
+                  "type": "uint16",
+                  "name": "publicSignalCount"
+                },
+                {
+                  "type": "address",
+                  "name": "relay"
+                },
+                {
+                  "type": "tuple",
+                  "name": "externalActionData",
+                  "components": [
+                    {
+                      "type": "address",
+                      "name": "externalAddress"
+                    },
+                    {
+                      "type": "uint256",
+                      "name": "externalActionId"
+                    },
+                    {
+                      "type": "bytes",
+                      "name": "externalActionMetadata"
+                    }
+                  ]
+                },
+                {
+                  "type": "tuple",
+                  "name": "hookData",
+                  "components": [
+                    {
+                      "type": "address",
+                      "name": "preHookContract"
+                    },
+                    {
+                      "type": "address",
+                      "name": "postHookContract"
+                    },
+                    {
+                      "type": "bytes",
+                      "name": "preHookMetadata"
+                    },
+                    {
+                      "type": "bytes",
+                      "name": "postHookMetadata"
+                    }
+                  ]
+                },
+                {
+                  "type": "address",
+                  "name": "originalSender"
+                },
+                {
+                  "type": "bytes",
+                  "name": "extraData"
+                },
+                {
+                  "type": "uint256",
+                  "name": "insertedLeafIndex"
+                },
+                {
+                  "type": "bool",
+                  "name": "createBlockedUtxos"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "type": "function",
+      "name": "transferOwnership",
+      "constant": false,
+      "payable": false,
+      "inputs": [
+        {
+          "type": "address",
+          "name": "newOwner"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "type": "function",
+      "name": "upgradeTo",
+      "constant": false,
+      "payable": false,
+      "inputs": [
+        {
+          "type": "address",
+          "name": "newImplementation"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "type": "function",
+      "name": "upgradeToAndCall",
+      "constant": false,
+      "stateMutability": "payable",
+      "payable": true,
+      "inputs": [
+        {
+          "type": "address",
+          "name": "newImplementation"
+        },
+        {
+          "type": "bytes",
+          "name": "data"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "type": "function",
+      "name": "vaultAddressOf",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [
+        {
+          "type": "tuple",
+          "name": "params",
+          "components": [
+            {
+              "type": "tuple",
+              "name": "recipient",
+              "components": [
+                {
+                  "type": "uint256",
+                  "name": "H0x"
+                },
+                {
+                  "type": "uint256",
+                  "name": "H0y"
+                },
+                {
+                  "type": "uint256",
+                  "name": "H1x"
+                },
+                {
+                  "type": "uint256",
+                  "name": "H1y"
+                },
+                {
+                  "type": "uint256",
+                  "name": "stealthAddress"
+                }
+              ]
+            },
+            {
+              "type": "address",
+              "name": "owner"
+            },
+            {
+              "type": "uint256",
+              "name": "version"
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "address",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "vaultInitCodeHash",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [
+        {
+          "type": "uint256",
+          "name": "version"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "bytes32",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "vaultVersionCount",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [],
+      "outputs": [
+        {
+          "type": "uint256",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "receive",
+      "stateMutability": "payable"
     }
   ]
 }

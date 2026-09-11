@@ -6,5 +6,6 @@
   "hinkalWalletAddress": "0x4B80DDB181bE35A64d378cfd2429ED9F8b6AE6fD",
   "lifiExternalActionInstanceAddress": "0x8b474575F5138E236474e2f42395c8a803B2487A",
   "depositOnChainUtxosExternalActionAddress": "0x120478B9643CA3b708D1e06b5dFdC5C727C5A3b4",
-  "timelockAddress": "0xDFaFA4F3Db041546C999B28533FA6B8b7AD474eA"
+  "timelockAddress": "0xDFaFA4F3Db041546C999B28533FA6B8b7AD474eA",
+  "receiveVaultFactoryAddress": ""
 }

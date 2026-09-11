@@ -7,6 +7,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/ethclient"
 	ethrpc "github.com/ethereum/go-ethereum/rpc"
+	"github.com/gagliardetto/solana-go/rpc"
+	"github.com/gagliardetto/solana-go/rpc/jsonrpc"
 
 	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/solana"
@@ -52,6 +54,11 @@ func SolanaFallbackHTTPClient() *http.Client {
 	return NewFallbackHTTPClient(5*time.Minute, solanaAlwaysProxyMethods, func(routePath string) string {
 		return constants.GetServerURL() + constants.ServerConfig.SolanaRpcProxy(routePath)
 	})
+}
+
+func NewSolanaRPCClientWithFallback(url string) *rpc.Client {
+	client := jsonrpc.NewClientWithOpts(url, &jsonrpc.RPCClientOpts{HTTPClient: SolanaFallbackHTTPClient()})
+	return rpc.NewWithCustomRPCClient(client)
 }
 
 func NewSolanaClientWithFallback(url string) *solana.Client {

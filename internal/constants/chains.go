@@ -18,6 +18,7 @@ type chainIDs struct {
 	SepoliaTestnet int
 	SolanaMainnet  int
 	SolanaLocalnet int
+	SolanaDevnet   int
 	TronNile       int
 	TronLocalnet   int
 	TronMainnet    int
@@ -44,6 +45,7 @@ var ChainIDs = chainIDs{
 	SepoliaTestnet: 11155111,
 	SolanaMainnet:  501,
 	SolanaLocalnet: 102,
+	SolanaDevnet:   502,
 	TronNile:       3448148188,
 	TronLocalnet:   103,
 	TronMainnet:    728126428,
@@ -144,6 +146,13 @@ var EthereumNetworkRegistry = map[int]types.EthereumNetwork{
 		Supported: true,
 		Priority:  9,
 	},
+	ChainIDs.SolanaDevnet: {
+		Name:      "Solana Devnet",
+		ChainID:   ChainIDs.SolanaDevnet,
+		RPCURL:    "https://api.devnet.solana.com",
+		Supported: true,
+		Priority:  9,
+	},
 	ChainIDs.TronNile: {
 		Name:        "Tron Nile",
 		ChainID:     ChainIDs.TronNile,
@@ -232,7 +241,7 @@ var EthereumNetworkRegistry = map[int]types.EthereumNetwork{
 
 var TronChainIDs = []int{ChainIDs.TronNile, ChainIDs.TronMainnet, ChainIDs.TronLocalnet}
 
-var SolanaChainIDs = []int{ChainIDs.SolanaMainnet, ChainIDs.SolanaLocalnet}
+var SolanaChainIDs = []int{ChainIDs.SolanaMainnet, ChainIDs.SolanaLocalnet, ChainIDs.SolanaDevnet}
 
 var HinkalSupportedChains = []int{
 	ChainIDs.EthMainnet,
@@ -344,6 +353,7 @@ var SaveDepths = map[int]uint64{
 	ChainIDs.Localhost:      1,
 	ChainIDs.SolanaMainnet:  1000,
 	ChainIDs.SolanaLocalnet: 100,
+	ChainIDs.SolanaDevnet:   1000,
 	ChainIDs.TronNile:       1000,
 	ChainIDs.TronMainnet:    1000,
 	ChainIDs.TronLocalnet:   100,

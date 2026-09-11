@@ -222,7 +222,7 @@ func hinkalShieldBridgedFunds(
 		recipientInfo = recipient.RecipientInfo
 	}
 
-	destTxHash, err := hinkalProxyToPrivate(ctx, hinkal, destChainID, destToken, shieldedAmount, tempAccount, recipientInfo, modifiedFeeStructure.FeeToken, &modifiedFeeStructure, types.AdminProxyToPrivateSend)
+	destTxHash, err := hinkalProxyToPrivate(ctx, hinkal, destChainID, destToken, shieldedAmount, tempAccount, recipientInfo, modifiedFeeStructure.FeeToken, &modifiedFeeStructure, types.AdminPublicToPrivateSend)
 	if err != nil {
 		return "", nil, err
 	}

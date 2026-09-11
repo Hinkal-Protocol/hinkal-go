@@ -16,4 +16,11 @@ const (
 	BpsDenominator int64 = 10_000
 
 	MaxTronSelfOutputs = 4
+
+	// ReceiveVaultSettleRequestTTLSeconds bounds an account proof handed to the main server.
+	ReceiveVaultSettleRequestTTLSeconds = 5 * 60
+	// ReceiveVaultRecoveryTTLSeconds bounds a recovery signature handed to the factory.
+	ReceiveVaultRecoveryTTLSeconds = 15 * 60
+	// ReceiveVaultVariableRate is the settle fee rate, in basis points.
+	ReceiveVaultVariableRate int64 = 25
 )

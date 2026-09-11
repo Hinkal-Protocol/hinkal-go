@@ -10,10 +10,12 @@ import (
 )
 
 var (
-	hinkalABIMu           sync.Mutex
-	hinkalABICache        = map[int]abi.ABI{}
-	hinkalWrapperABIMu    sync.Mutex
-	hinkalWrapperABICache = map[int]abi.ABI{}
+	hinkalABIMu                 sync.Mutex
+	hinkalABICache              = map[int]abi.ABI{}
+	hinkalWrapperABIMu          sync.Mutex
+	hinkalWrapperABICache       = map[int]abi.ABI{}
+	receiveVaultFactoryABIMu    sync.Mutex
+	receiveVaultFactoryABICache = map[int]abi.ABI{}
 )
 
 func Hinkal(chainID int) (abi.ABI, error) {
@@ -51,5 +53,24 @@ func HinkalWrapper(chainID int) (abi.ABI, error) {
 		return abi.ABI{}, err
 	}
 	hinkalWrapperABICache[chainID] = parsed
+	return parsed, nil
+}
+
+func ReceiveVaultFactory(chainID int) (abi.ABI, error) {
+	receiveVaultFactoryABIMu.Lock()
+	defer receiveVaultFactoryABIMu.Unlock()
+
+	if cached, ok := receiveVaultFactoryABICache[chainID]; ok {
+		return cached, nil
+	}
+	raw, err := constants.ReceiveVaultFactoryABIJSON(chainID)
+	if err != nil {
+		return abi.ABI{}, err
+	}
+	parsed, err := abi.JSON(bytes.NewReader(raw))
+	if err != nil {
+		return abi.ABI{}, err
+	}
+	receiveVaultFactoryABICache[chainID] = parsed
 	return parsed, nil
 }

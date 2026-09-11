@@ -9,6 +9,7 @@ import (
 	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/hinkal/ihinkal"
 	errorhandling "github.com/Hinkal-Protocol/hinkal-go/internal/error-handling"
+	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/fees"
 	pretransaction "github.com/Hinkal-Protocol/hinkal-go/internal/functions/pre-transaction"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/utils"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/types"
@@ -92,8 +93,21 @@ func HinkalWithdraw(
 		if err != nil {
 			return types.TransactionRequest{}, "", err
 		}
+		preFeeAmounts := copyBigInts(amountChanges)
+
 		if err := pretransaction.MergeWithFeeStructure(ctx, chainID, &erc20Addresses, &amountChanges, feeStructure); err != nil {
 			return types.TransactionRequest{}, "", err
+		}
+
+		// Gross up sender's spend so recipient still nets the requested amount after on-chain variableRate cut.
+		if feeStructure.VariableRate.Sign() > 0 {
+			for i := range erc20Tokens {
+				if amountChanges[i].Sign() >= 0 {
+					continue
+				}
+				netDesired := new(big.Int).Neg(preFeeAmounts[i])
+				amountChanges[i].Sub(amountChanges[i], fees.CalculateVariableFeeGrossUp(netDesired, feeStructure.VariableRate))
+			}
 		}
 	}
 

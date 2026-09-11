@@ -9,7 +9,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	solana "github.com/gagliardetto/solana-go"
 	"github.com/gagliardetto/solana-go/rpc"
-	"github.com/gagliardetto/solana-go/rpc/jsonrpc"
 
 	"github.com/Hinkal-Protocol/hinkal-go/internal/api"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
@@ -33,10 +32,9 @@ func NewSolanaProviderAdapter(chainID int, ethereumAddress string) (*SolanaProvi
 		return nil, err
 	}
 	id := chainID
-	rpcClient := jsonrpc.NewClientWithOpts(rpcURL, &jsonrpc.RPCClientOpts{HTTPClient: api.SolanaFallbackHTTPClient()})
 	return &SolanaProviderAdapter{
 		chainID:         &id,
-		client:          rpc.NewWithCustomRPCClient(rpcClient),
+		client:          api.NewSolanaRPCClientWithFallback(rpcURL),
 		ethereumAddress: ethereumAddress,
 	}, nil
 }

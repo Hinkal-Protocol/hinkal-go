@@ -16,7 +16,7 @@ func GetTokenPrices(ctx context.Context, chainID int, erc20Addresses []string) (
 		"chainId":        chainID,
 	}
 	var resp GetTokenPricesResponse
-	if err := Post(ctx, constants.GetRelayerURL()+constants.RelayerConfig.GetTokenPrices, body, &resp); err != nil {
+	if err := Post(ctx, constants.GetDataServerURL()+constants.DataServerConfig.GetTokenPrices, body, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil

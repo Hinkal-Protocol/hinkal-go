@@ -111,6 +111,10 @@ func (h *Hinkal) InitUserKeysWithSignature(signature string) {
 	h.UserKeys = cryptokeys.NewUserKeys(signature)
 }
 
+func (h *Hinkal) InitUserKeysWithNullifyingKey(nullifyingKey string) {
+	h.UserKeys = cryptokeys.NewUserKeysFromNullifyingKey(nullifyingKey)
+}
+
 func (h *Hinkal) InitUserKeysFromSeedPhrases(seedPhrases []string) error {
 	seedHash, err := utils.GenerateHashFromSeedPhrases(seedPhrases)
 	if err != nil {
@@ -396,6 +400,10 @@ func copyInts(values []int) []int {
 
 func (h *Hinkal) GetShieldedPublicKey() (string, error) {
 	return h.UserKeys.GetShieldedPublicKey()
+}
+
+func (h *Hinkal) GetNullifyingKey() (string, error) {
+	return h.UserKeys.GetShieldedPrivateKey()
 }
 
 func (h *Hinkal) AreMerkleTreeUpdatesDisabled() bool {

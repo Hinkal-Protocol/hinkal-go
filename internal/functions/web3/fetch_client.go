@@ -25,7 +25,7 @@ func fetchClient(chainID int) (*ethclient.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	client, err := api.DialEthClientWithFallback(chainID, rpcURL)
+	client, err := api.DialEthClientWithFallback(chainID, constants.WithTronJSONRPCSuffix(chainID, rpcURL))
 	if err != nil {
 		return nil, err
 	}

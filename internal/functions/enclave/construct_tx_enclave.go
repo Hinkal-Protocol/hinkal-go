@@ -110,6 +110,7 @@ func buildPrepareTxRequest(p types.PrepareTxParams, nullifyingKey string, spendi
 		Speculative:            p.Speculative,
 		NullifyingKey:          nullifyingKey,
 		SlippageValues:         bigIntStrings(p.SlippageValues),
+		ReceiveVaultAddress:    p.ReceiveVaultAddress,
 		SpendingPublicKey:      spendingPublicKey,
 	}
 	if p.FeeStructure != nil {
@@ -149,6 +150,7 @@ func assertPrepareTxEchoMatches(payload types.PrepareTxRequestType, echoed types
 		SkipLock:               payload.SkipLock,
 		MessageSeed:            payload.MessageSeed,
 		Speculative:            payload.Speculative,
+		ReceiveVaultAddress:    payload.ReceiveVaultAddress,
 	}
 	if !reflect.DeepEqual(expected, echoed) {
 		return errPrepareTxEchoMismatch

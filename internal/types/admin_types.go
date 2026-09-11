@@ -4,7 +4,7 @@ type AdminTransactionType string
 
 const (
 	AdminPrivateToPrivateSend     AdminTransactionType = "private_to_private_send"
-	AdminProxyToPrivateSend       AdminTransactionType = "proxy_to_private_send"
+	AdminPublicToPrivateSend      AdminTransactionType = "public_to_private_send"
 	AdminPrivateToPublicSend      AdminTransactionType = "private_to_public_send"
 	AdminPublicToPublicSend       AdminTransactionType = "public_to_public_send"
 	AdminPublicToPublicBridgeSend AdminTransactionType = "public_to_public_bridge_send"

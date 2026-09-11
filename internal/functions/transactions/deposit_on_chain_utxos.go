@@ -9,6 +9,7 @@ import (
 	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/hinkal/ihinkal"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/utxo"
+	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/fees"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/utils"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/web3"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/types"
@@ -37,13 +38,7 @@ type PreparedDepositOnChainUtxos struct {
 }
 
 func depositAndWithdrawUtxoAmounts(recipientAmounts []*big.Int, feeStructure types.FeeStructure) ([]*big.Int, *big.Int) {
-	utxoAmounts := make([]*big.Int, len(recipientAmounts))
-	totalAmount := new(big.Int)
-	for i, amount := range recipientAmounts {
-		utxoAmounts[i] = new(big.Int).Add(amount, feeStructure.FlatFee)
-		totalAmount.Add(totalAmount, utxoAmounts[i])
-	}
-	return utxoAmounts, totalAmount
+	return fees.CalculateGrossUtxoAmounts(recipientAmounts, feeStructure)
 }
 
 func PrepareDepositOnChainUtxos(

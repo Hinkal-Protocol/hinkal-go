@@ -24,6 +24,7 @@ var deployDataFileByChain = map[int]string{
 	ChainIDs.Tempo:          "deploy-data-tempo.json",
 	ChainIDs.SolanaMainnet:  "deploy-data-solana.json",
 	ChainIDs.SolanaLocalnet: "deploy-data-solana.json",
+	ChainIDs.SolanaDevnet:   "deploy-data-solanaDevnet.json",
 	ChainIDs.TronNile:       "deploy-data-tronNile.json",
 	ChainIDs.TronMainnet:    "deploy-data-tronMainnet.json",
 	ChainIDs.Localhost:      "deploy-data-localhost.json",
@@ -53,6 +54,7 @@ type ContractData struct {
 	HinkalWalletAddress                      string
 	LifiExternalActionInstanceAddress        string
 	OriginalDeployer                         string
+	ReceiveVaultFactoryAddress               string
 }
 
 type deployDataFile struct {
@@ -64,8 +66,10 @@ type deployDataFile struct {
 	HinkalWalletAddress                      string          `json:"hinkalWalletAddress"`
 	LifiExternalActionInstanceAddress        string          `json:"lifiExternalActionInstanceAddress"`
 	OriginalDeployer                         string          `json:"originalDeployer"`
+	ReceiveVaultFactoryAddress               string          `json:"receiveVaultFactoryAddress"`
 	HinkalABI                                json.RawMessage `json:"hinkalABI"`
 	HinkalWrapperABI                         json.RawMessage `json:"hinkalWrapperABI"`
+	ReceiveVaultFactoryABI                   json.RawMessage `json:"receiveVaultFactoryABI"`
 }
 
 var (
@@ -98,7 +102,7 @@ func loadDeployData(chainID int) (*deployDataFile, error) {
 	if err := json.Unmarshal(raw, &parsed); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", file, err)
 	}
-	if len(parsed.HinkalABI) == 0 || len(parsed.HinkalWrapperABI) == 0 {
+	if len(parsed.HinkalABI) == 0 || len(parsed.HinkalWrapperABI) == 0 || len(parsed.ReceiveVaultFactoryABI) == 0 {
 		if shared, ok := sharedDeployFileByChain[chainID]; ok {
 			sharedRaw, err := deployDataFS.ReadFile("deploy-data/" + shared)
 			if err != nil {
@@ -114,6 +118,9 @@ func loadDeployData(chainID int) (*deployDataFile, error) {
 			}
 			if len(parsed.HinkalWrapperABI) == 0 {
 				parsed.HinkalWrapperABI = sharedData.HinkalWrapperABI
+			}
+			if len(parsed.ReceiveVaultFactoryABI) == 0 {
+				parsed.ReceiveVaultFactoryABI = sharedData.ReceiveVaultFactoryABI
 			}
 		}
 	}
@@ -135,6 +142,7 @@ func GetContractData(chainID int) (ContractData, error) {
 		HinkalWalletAddress:                      d.HinkalWalletAddress,
 		LifiExternalActionInstanceAddress:        d.LifiExternalActionInstanceAddress,
 		OriginalDeployer:                         d.OriginalDeployer,
+		ReceiveVaultFactoryAddress:               d.ReceiveVaultFactoryAddress,
 	}, nil
 }
 
@@ -179,6 +187,25 @@ func HinkalWrapperAddress(chainID int) (string, error) {
 		return "", err
 	}
 	return contractData.HinkalWrapperAddress, nil
+}
+
+func ReceiveVaultFactoryAddress(chainID int) (string, error) {
+	contractData, err := GetContractData(chainID)
+	if err != nil {
+		return "", err
+	}
+	return contractData.ReceiveVaultFactoryAddress, nil
+}
+
+func ReceiveVaultFactoryABIJSON(chainID int) ([]byte, error) {
+	d, err := loadDeployData(chainID)
+	if err != nil {
+		return nil, err
+	}
+	if len(d.ReceiveVaultFactoryABI) == 0 {
+		return nil, fmt.Errorf("no receive vault factory ABI for chain %d", chainID)
+	}
+	return d.ReceiveVaultFactoryABI, nil
 }
 
 func HinkalWrapperABIJSON(chainID int) ([]byte, error) {

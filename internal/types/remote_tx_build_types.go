@@ -50,6 +50,7 @@ type PrepareTxParams struct {
 	MessageSeed            *big.Int
 	Speculative            *SpeculativeTreeParams
 	SlippageValues         []*big.Int
+	ReceiveVaultAddress    string
 }
 
 type PrepareTxRequestType struct {
@@ -75,6 +76,7 @@ type PrepareTxRequestType struct {
 	MessageSeed            string                 `json:"messageSeed,omitempty"`
 	Speculative            *SpeculativeTreeParams `json:"speculative,omitempty"`
 	SlippageValues         []string               `json:"slippageValues,omitempty"`
+	ReceiveVaultAddress    string                 `json:"receiveVaultAddress,omitempty"`
 	NullifyingKey          string                 `json:"nullifyingKey"`
 	SpendingPublicKey      [2]string              `json:"spendingPublicKey"`
 }
@@ -102,6 +104,7 @@ type EchoedPrepareTxRequestType struct {
 	MessageSeed            string                 `json:"messageSeed"`
 	Speculative            *SpeculativeTreeParams `json:"speculative,omitempty"`
 	SlippageValues         []string               `json:"slippageValues"`
+	ReceiveVaultAddress    string                 `json:"receiveVaultAddress,omitempty"`
 }
 
 type PreparedJobType struct {

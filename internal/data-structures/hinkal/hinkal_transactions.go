@@ -12,6 +12,7 @@ import (
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/integrations"
 	pretransaction "github.com/Hinkal-Protocol/hinkal-go/internal/functions/pre-transaction"
 	privatewallet "github.com/Hinkal-Protocol/hinkal-go/internal/functions/private-wallet"
+	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/receivevault"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/transactions"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/web3"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/types"
@@ -112,6 +113,7 @@ func (h *Hinkal) DepositSolanaForOther(
 	amount *big.Int,
 	recipientInfo string,
 	returnTxData bool,
+	variableRate *big.Int,
 ) (string, error) {
 	if err := h.enforceRateLimit("DepositSolanaForOther", amount, erc20Address, recipientInfo); err != nil {
 		return "", err
@@ -120,7 +122,7 @@ func (h *Hinkal) DepositSolanaForOther(
 	if err != nil {
 		return "", err
 	}
-	return transactions.HinkalSolanaDepositForOther(ctx, h, amount, token, recipientInfo, returnTxData)
+	return transactions.HinkalSolanaDepositForOther(ctx, h, amount, token, recipientInfo, returnTxData, variableRate)
 }
 
 func (h *Hinkal) ProoflessDeposit(
@@ -339,6 +341,25 @@ func (h *Hinkal) WithdrawStuckUtxos(
 		return nil, err
 	}
 	return transactions.HinkalWithdrawStuckUtxos(ctx, h, erc20Tokens, recipientAddress)
+}
+
+func (h *Hinkal) CreateReceiveAddress(ctx context.Context, chainID int, forceFresh ...bool) (types.ReceiveVaultRecord, error) {
+	return receivevault.HinkalCreateReceiveAddress(ctx, h, chainID, forceFresh...)
+}
+
+func (h *Hinkal) GetReceiveVaultAccount(ctx context.Context) (types.ReceiveVaultAccount, error) {
+	return receivevault.HinkalGetReceiveVaultAccount(ctx, h)
+}
+
+func (h *Hinkal) RecoverReceiveVault(
+	ctx context.Context,
+	record types.ReceiveVaultRecord,
+	token string,
+	to string,
+	returnTxData bool,
+	chainID int,
+) (types.TransactionRequest, string, error) {
+	return receivevault.HinkalReceiveVaultRecover(ctx, h, record, token, to, returnTxData, chainID)
 }
 
 func (h *Hinkal) CheckSendTransactionStatus(ctx context.Context, scheduleID string) (types.ScheduledTransactionByIDResponse, error) {

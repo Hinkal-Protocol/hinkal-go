@@ -12,7 +12,6 @@ var ServerConfig = struct {
 	CallOkxAPI                    string
 	CallNearIntentsQuote          string
 	CallNearIntentsTokens         string
-	GetOdosPriceForToken          func(chainID int, tokenAddress string) string
 	Monitor                       string
 	MonitorBatch                  string
 	CheckRisk                     func(address string) string
@@ -20,6 +19,8 @@ var ServerConfig = struct {
 	GetTemporaryWalletNonces      func(hashedEthereumAddress string, chainID int) string
 	AddTemporaryWalletNonce       string
 	RemoveTemporaryWalletNonce    string
+	RegisterReceiveVault          string
+	ReceiveVaultAccount           string
 	GetTokensInfo                 string
 	GetTokensForChain             string
 	GetTokenData                  func(tokenSymbol string) string
@@ -27,13 +28,10 @@ var ServerConfig = struct {
 	EvmRpcProxy                   func(chainID int, key string) string
 	SolanaRpcProxy                func(key string) string
 }{
-	CallLifiAPI:           "/LifiBridgeData",
-	CallOkxAPI:            "/OkxSwapData",
-	CallNearIntentsQuote:  "/near-intents/quote",
-	CallNearIntentsTokens: "/near-intents/tokens",
-	GetOdosPriceForToken: func(chainID int, tokenAddress string) string {
-		return fmt.Sprintf("/getOdosPriceForToken/%d/%s", chainID, tokenAddress)
-	},
+	CallLifiAPI:                   "/LifiBridgeData",
+	CallOkxAPI:                    "/OkxSwapData",
+	CallNearIntentsQuote:          "/near-intents/quote",
+	CallNearIntentsTokens:         "/near-intents/tokens",
 	Monitor:                       "/monitor",
 	MonitorBatch:                  "/monitor/batch",
 	CheckRisk:                     func(address string) string { return "/check-risk/" + address },
@@ -43,6 +41,8 @@ var ServerConfig = struct {
 	},
 	AddTemporaryWalletNonce:    "/temporary-wallets/add-nonce",
 	RemoveTemporaryWalletNonce: "/temporary-wallets/remove-nonce",
+	RegisterReceiveVault:       "/receive-vault/register",
+	ReceiveVaultAccount:        "/receive-vault/account",
 	GetTokensInfo:              "/get-tokens-info",
 	GetTokensForChain:          "/get-tokens-for-chain",
 	GetTokenData:               func(tokenSymbol string) string { return "/get-token-data/" + tokenSymbol },
@@ -66,7 +66,6 @@ var SnapshotServerConfig = struct {
 // RelayerConfig mirrors RELAYER_CONFIG from server.constants.ts.
 var RelayerConfig = struct {
 	GetGasEstimate                           func(tokenAddress, externalActionID string, erc20TokenAddressLength int, gasAmount *int) string
-	GetTokenPrices                           string
 	Transact                                 string
 	TransactBatch                            string
 	SolanaTransact                           string
@@ -77,10 +76,6 @@ var RelayerConfig = struct {
 	GetScheduledTransactions                 string
 	GetScheduledTransactionByID              func(scheduleID string) string
 	GetScheduledTransactionsNullifierIndexes string
-	GetTokenPriceChartData                   string
-	GetTokenPreviousDayPrices                string
-	GetPrivateTransactionsRatio              func(hashedOwner string) string
-	SavePrivacyScoreAndGetPrivacyRank        string
 }{
 	GetGasEstimate: func(tokenAddress, externalActionID string, erc20TokenAddressLength int, gasAmount *int) string {
 		gas := "undefined"
@@ -89,7 +84,6 @@ var RelayerConfig = struct {
 		}
 		return fmt.Sprintf("/gas-estimation/%s/%d/%s/%s", tokenAddress, erc20TokenAddressLength, externalActionID, gas)
 	},
-	GetTokenPrices:                           "/get-token-prices",
 	Transact:                                 "/general-transact",
 	TransactBatch:                            "/general-transact-batch",
 	SolanaTransact:                           "/solana-transact",
@@ -100,10 +94,20 @@ var RelayerConfig = struct {
 	GetScheduledTransactions:                 "/scheduled-transactions",
 	GetScheduledTransactionByID:              func(scheduleID string) string { return "/scheduled-transactions/" + scheduleID },
 	GetScheduledTransactionsNullifierIndexes: "/scheduled-transactions/nullifier-indexes",
-	GetTokenPriceChartData:                   "/get-token-price-chart-data",
-	GetTokenPreviousDayPrices:                "/get-token-previous-day-prices",
-	GetPrivateTransactionsRatio:              func(hashedOwner string) string { return "/get-private-transactions-ratio/" + hashedOwner },
-	SavePrivacyScoreAndGetPrivacyRank:        "/save-privacy-score-and-get-privacy-rank",
+}
+
+var DataServerConfig = struct {
+	GetTokenPrices                    string
+	GetTokenPriceChartData            string
+	GetTokenPreviousDayPrices         string
+	GetPrivateTransactionsRatio       func(hashedOwner string) string
+	SavePrivacyScoreAndGetPrivacyRank string
+}{
+	GetTokenPrices:                    "/get-token-prices",
+	GetTokenPriceChartData:            "/get-token-price-chart-data",
+	GetTokenPreviousDayPrices:         "/get-token-previous-day-prices",
+	GetPrivateTransactionsRatio:       func(hashedOwner string) string { return "/get-private-transactions-ratio/" + hashedOwner },
+	SavePrivacyScoreAndGetPrivacyRank: "/save-privacy-score-and-get-privacy-rank",
 }
 
 // EnclaveConfig holds enclave-server route paths (inlined in TS enclave calls).
