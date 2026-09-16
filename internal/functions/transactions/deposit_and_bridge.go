@@ -163,10 +163,6 @@ func hinkalBridgeBatchPrepare(
 	if err != nil {
 		return nil, err
 	}
-	relay, err := relayerAddress(ctx, hinkal, chainID)
-	if err != nil {
-		return nil, err
-	}
 	fetchClient, err := hinkal.GetFetchClient(chainID)
 	if err != nil {
 		return nil, err
@@ -259,7 +255,7 @@ func hinkalBridgeBatchPrepare(
 						if err != nil {
 							return err
 						}
-						encoded, err := privatewallet.EncodeEmporiumMetadata(chainID, contractData.EmporiumAddress, recipient.TemporarySubAccount.PrivateKey, ops, emporiumMessage, signerAddress)
+						encoded, err := privatewallet.EncodeEmporiumMetadata(chainID, contractData.EmporiumAddress, recipient.TemporarySubAccount.PrivateKey, ops, emporiumMessage, signerAddress, feeStructure.FlatFee)
 						if err != nil {
 							return err
 						}
@@ -274,7 +270,8 @@ func hinkalBridgeBatchPrepare(
 						ExternalAddress:        contractData.EmporiumAddress,
 						ExternalActionMetadata: externalActionMetadata,
 						FeeStructure:           &feeStructure,
-						Relay:                  relay,
+						NeedsRelay:             true,
+						SkipRelayReservation:   true,
 						OnChainCreation:        onChainCreation,
 						MessageSeed:            messageSeed,
 						InputUtxos:             inputUtxosArray,

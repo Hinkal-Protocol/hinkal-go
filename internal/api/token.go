@@ -47,3 +47,26 @@ func GetTokensForChain(ctx context.Context, chainID int) ([]types.ERC20Token, er
 	}
 	return tokens, nil
 }
+
+type getEvmTokenBalancesRequest struct {
+	ChainID       int    `json:"chainId"`
+	WalletAddress string `json:"walletAddress"`
+}
+
+type EvmTokenBalanceEntry struct {
+	ContractAddress string `json:"contractAddress"`
+	TokenBalance    string `json:"tokenBalance"`
+}
+
+type getEvmTokenBalancesResponse struct {
+	Balances []EvmTokenBalanceEntry `json:"balances"`
+}
+
+func GetEvmTokenBalances(ctx context.Context, chainID int, walletAddress string) ([]EvmTokenBalanceEntry, error) {
+	var resp getEvmTokenBalancesResponse
+	body := getEvmTokenBalancesRequest{ChainID: chainID, WalletAddress: walletAddress}
+	if err := Post(ctx, constants.GetServerURL()+constants.ServerConfig.EvmTokenBalances, body, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Balances, nil
+}

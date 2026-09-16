@@ -65,6 +65,7 @@ type HinkalTransactParams struct {
 	ExternalActionMetadata []string
 	FeeStructure           *types.FeeStructure
 	Relay                  string
+	AutoSelectRelay        bool
 	OnChainCreation        []bool
 	RecipientAddress       string
 	RecipientAmounts       []*big.Int
@@ -84,6 +85,8 @@ type HinkalTransactParams struct {
 	UserKeys             *cryptokeys.UserKeys
 	SubAccountPrivateKey string
 	EmporiumOps          []string
+	NeedsRelay           bool
+	SkipRelayReservation bool
 	OnTxConfirm          func(types.CircomDataType) error
 }
 

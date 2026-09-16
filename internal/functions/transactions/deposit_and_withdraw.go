@@ -93,10 +93,6 @@ func hinkalWithdrawBatchPrepare(
 		return nil, errUserDepositedUtxosEmpty
 	}
 	tokenAddress := erc20Token.Erc20TokenAddress
-	relay, err := relayerAddress(ctx, hinkal, chainID)
-	if err != nil {
-		return nil, err
-	}
 	transactions := make([]web3.TransactCallRelayerBatchItem, 0, len(userDepositedUtxos))
 
 	generateProofRemotely := hinkal.GenerateProofRemotely()
@@ -139,18 +135,19 @@ func hinkalWithdrawBatchPrepare(
 				}
 
 				result, err := HinkalTransact(groupCtx, hinkal, HinkalTransactParams{
-					ChainID:          chainID,
-					Erc20Addresses:   []string{tokenAddress},
-					AmountChanges:    []*big.Int{new(big.Int).Neg(utxoToWithdraw.Amount)},
-					ExternalActionID: types.ExternalActionZero,
-					ExternalAddress:  recipientAddressHex,
-					FeeStructure:     &feeStructure,
-					Relay:            relay,
-					InputUtxos:       inputUtxos,
-					UseBlockedUtxos:  true,
-					Speculative:      speculative,
-					SkipLock:         true,
-					Submit:           NewProofOnlySubmit(),
+					ChainID:              chainID,
+					Erc20Addresses:       []string{tokenAddress},
+					AmountChanges:        []*big.Int{new(big.Int).Neg(utxoToWithdraw.Amount)},
+					ExternalActionID:     types.ExternalActionZero,
+					ExternalAddress:      recipientAddressHex,
+					FeeStructure:         &feeStructure,
+					NeedsRelay:           true,
+					SkipRelayReservation: true,
+					InputUtxos:           inputUtxos,
+					UseBlockedUtxos:      true,
+					Speculative:          speculative,
+					SkipLock:             true,
+					Submit:               NewProofOnlySubmit(),
 				})
 				if err != nil {
 					return err

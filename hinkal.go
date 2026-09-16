@@ -66,7 +66,6 @@ type (
 
 	PrivateBridgeRecipient = bridging.PrivateBridgeRecipient
 	PrivateBridgeResult    = bridging.PrivateBridgeResult
-	PendingEnclaveUtxo     = bridging.PendingEnclaveUtxo
 
 	NearBridgeParams = types.NearBridgeParams
 	NearBridgeResult = types.NearBridgeResult

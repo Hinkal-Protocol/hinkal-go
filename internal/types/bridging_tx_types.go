@@ -9,9 +9,11 @@ type BridgeQuote struct {
 }
 
 type TemporarySubAccount struct {
-	Index      int    `json:"index"`
-	EthAddress string `json:"ethAddress"`
-	PrivateKey string `json:"privateKey"`
+	Index            int    `json:"index"`
+	EthAddress       string `json:"ethAddress"`
+	PrivateKey       string `json:"privateKey"`
+	SolanaAddress    string `json:"solanaAddress,omitempty"`
+	SolanaPrivateKey string `json:"solanaPrivateKey,omitempty"`
 }
 
 type BridgeRecipient struct {

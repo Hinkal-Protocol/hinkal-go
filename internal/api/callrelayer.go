@@ -54,17 +54,6 @@ type RelayerBatchResponse struct {
 	Error   string               `json:"error,omitempty"`
 }
 
-type emitTxPublicDataBody struct {
-	AdminData *types.AdminDataType `json:"adminData"`
-}
-
-func EmitTxPublicData(ctx context.Context, adminData *types.AdminDataType) error {
-	if adminData == nil {
-		return nil
-	}
-	return Post(ctx, constants.GetRelayerURL()+constants.RelayerConfig.EmitTxPublicData, emitTxPublicDataBody{AdminData: adminData}, nil)
-}
-
 func CallRelayerTransactAPI(ctx context.Context, body HinkalTransactionRequestBody) (RelayerResponse, error) {
 	var resp RelayerResponse
 	if err := Post(ctx, constants.GetRelayerURL()+constants.RelayerConfig.Transact, body, &resp); err != nil {

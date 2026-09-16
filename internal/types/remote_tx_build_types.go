@@ -35,6 +35,8 @@ type PrepareTxParams struct {
 	ExternalAddress        string
 	OriginalSender         string
 	Relay                  string
+	AutoSelectRelay        bool
+	SkipRelayReservation   bool
 	FeeStructure           *FeeStructure
 	ExternalActionID       ExternalActionID
 	ExternalActionMetadata string
@@ -61,6 +63,8 @@ type PrepareTxRequestType struct {
 	ExternalAddress        string                 `json:"externalAddress"`
 	OriginalSender         string                 `json:"originalSender,omitempty"`
 	Relay                  string                 `json:"relay,omitempty"`
+	AutoSelectRelay        bool                   `json:"autoSelectRelay,omitempty"`
+	SkipRelayReservation   bool                   `json:"skipRelayReservation,omitempty"`
 	FeeStructure           *FeeStructureJSON      `json:"feeStructure,omitempty"`
 	ExternalActionID       string                 `json:"externalActionId,omitempty"`
 	ExternalActionMetadata string                 `json:"externalActionMetadata,omitempty"`
@@ -134,6 +138,8 @@ type EnclaveWitnessPreimage struct {
 	InH0Ax       [][]string `json:"inH0Ax"`
 	InH0Ay       [][]string `json:"inH0Ay"`
 	InTimeStamps [][]string `json:"inTimeStamps"`
+
+	Relay string `json:"relay"`
 }
 
 // dimensions is present but zero-valued for EVM jobs - only Solana jobs populate it.
@@ -156,55 +162,59 @@ type PrepareSolanaTxAccountMeta struct {
 }
 
 type PrepareSolanaTxParams struct {
-	ChainID            int
-	MintAddresses      []string
-	AmountChanges      []*big.Int
-	RelayAddress       string
-	Recipient          string
-	Signer             string
-	FunctionName       string
-	Accounts           json.RawMessage
-	OnChainCreation    []bool
-	RelayerFee         *big.Int
-	VariableRate       *big.Int
-	SwapperAccountSalt *big.Int
-	HinkalInstructions []PrepareSolanaTxInstruction
-	RemainingAccounts  []PrepareSolanaTxAccountMeta
-	RecipientAddress   string
-	RecipientAmounts   []*big.Int
-	InputCommitments   []string
-	UseBlockedUtxos    bool
-	MessageSeed        *big.Int
-	RecipientAmount    string
-	DisplayRecipient   string
-	Speculative        *SpeculativeTreeParams
+	ChainID              int
+	MintAddresses        []string
+	AmountChanges        []*big.Int
+	RelayAddress         string
+	AutoSelectRelay      bool
+	SkipRelayReservation bool
+	Recipient            string
+	Signer               string
+	FunctionName         string
+	Accounts             json.RawMessage
+	OnChainCreation      []bool
+	RelayerFee           *big.Int
+	VariableRate         *big.Int
+	SwapperAccountSalt   *big.Int
+	HinkalInstructions   []PrepareSolanaTxInstruction
+	RemainingAccounts    []PrepareSolanaTxAccountMeta
+	RecipientAddress     string
+	RecipientAmounts     []*big.Int
+	InputCommitments     []string
+	UseBlockedUtxos      bool
+	MessageSeed          *big.Int
+	RecipientAmount      string
+	DisplayRecipient     string
+	Speculative          *SpeculativeTreeParams
 }
 
 type PrepareSolanaTxRequestType struct {
-	ChainID            string                       `json:"chainId"`
-	MintAddresses      []string                     `json:"mintAddresses"`
-	AmountChanges      []string                     `json:"amountChanges"`
-	RelayAddress       string                       `json:"relayAddress"`
-	Recipient          string                       `json:"recipient"`
-	Signer             string                       `json:"signer,omitempty"`
-	FunctionName       string                       `json:"functionName"`
-	Accounts           json.RawMessage              `json:"accounts"`
-	OnChainCreation    []bool                       `json:"onChainCreation,omitempty"`
-	RelayerFee         string                       `json:"relayerFee,omitempty"`
-	VariableRate       string                       `json:"variableRate,omitempty"`
-	HinkalInstructions []PrepareSolanaTxInstruction `json:"hinkalInstructions,omitempty"`
-	RemainingAccounts  []PrepareSolanaTxAccountMeta `json:"remainingAccounts,omitempty"`
-	SwapperAccountSalt string                       `json:"swapperAccountSalt,omitempty"`
-	RecipientAddress   string                       `json:"recipientAddress,omitempty"`
-	RecipientAmounts   []string                     `json:"recipientAmounts,omitempty"`
-	InputCommitments   []string                     `json:"inputCommitments,omitempty"`
-	UseBlockedUtxos    bool                         `json:"useBlockedUtxos,omitempty"`
-	MessageSeed        string                       `json:"messageSeed,omitempty"`
-	RecipientAmount    string                       `json:"recipientAmount,omitempty"`
-	DisplayRecipient   string                       `json:"displayRecipient,omitempty"`
-	Speculative        *SpeculativeTreeParams       `json:"speculative,omitempty"`
-	NullifyingKey      string                       `json:"nullifyingKey"`
-	SpendingPublicKey  [2]string                    `json:"spendingPublicKey"`
+	ChainID              string                       `json:"chainId"`
+	MintAddresses        []string                     `json:"mintAddresses"`
+	AmountChanges        []string                     `json:"amountChanges"`
+	RelayAddress         string                       `json:"relayAddress"`
+	AutoSelectRelay      bool                         `json:"autoSelectRelay,omitempty"`
+	SkipRelayReservation bool                         `json:"skipRelayReservation,omitempty"`
+	Recipient            string                       `json:"recipient"`
+	Signer               string                       `json:"signer,omitempty"`
+	FunctionName         string                       `json:"functionName"`
+	Accounts             json.RawMessage              `json:"accounts"`
+	OnChainCreation      []bool                       `json:"onChainCreation,omitempty"`
+	RelayerFee           string                       `json:"relayerFee,omitempty"`
+	VariableRate         string                       `json:"variableRate,omitempty"`
+	HinkalInstructions   []PrepareSolanaTxInstruction `json:"hinkalInstructions,omitempty"`
+	RemainingAccounts    []PrepareSolanaTxAccountMeta `json:"remainingAccounts,omitempty"`
+	SwapperAccountSalt   string                       `json:"swapperAccountSalt,omitempty"`
+	RecipientAddress     string                       `json:"recipientAddress,omitempty"`
+	RecipientAmounts     []string                     `json:"recipientAmounts,omitempty"`
+	InputCommitments     []string                     `json:"inputCommitments,omitempty"`
+	UseBlockedUtxos      bool                         `json:"useBlockedUtxos,omitempty"`
+	MessageSeed          string                       `json:"messageSeed,omitempty"`
+	RecipientAmount      string                       `json:"recipientAmount,omitempty"`
+	DisplayRecipient     string                       `json:"displayRecipient,omitempty"`
+	Speculative          *SpeculativeTreeParams       `json:"speculative,omitempty"`
+	NullifyingKey        string                       `json:"nullifyingKey"`
+	SpendingPublicKey    [2]string                    `json:"spendingPublicKey"`
 }
 
 type EchoedPrepareSolanaTxRequestType struct {
@@ -250,6 +260,7 @@ type PrepareSolanaStuckWithdrawParams struct {
 	MintAddress           string
 	Recipient             string
 	RelayAddress          string
+	AutoSelectRelay       bool
 	Accounts              json.RawMessage
 	FeeStructures         map[string]FeeStructure
 	HashedEthereumAddress string
@@ -260,6 +271,7 @@ type PrepareSolanaStuckWithdrawRequestType struct {
 	MintAddress           string                      `json:"mintAddress"`
 	Recipient             string                      `json:"recipient"`
 	RelayAddress          string                      `json:"relayAddress"`
+	AutoSelectRelay       bool                        `json:"autoSelectRelay,omitempty"`
 	Accounts              json.RawMessage             `json:"accounts"`
 	FeeStructures         map[string]FeeStructureJSON `json:"feeStructures"`
 	HashedEthereumAddress string                      `json:"hashedEthereumAddress"`
@@ -289,6 +301,7 @@ type PrepareStuckWithdrawRequestType struct {
 	Erc20Address          string           `json:"erc20Address"`
 	ExternalAddress       string           `json:"externalAddress"`
 	Relay                 string           `json:"relay"`
+	AutoSelectRelay       bool             `json:"autoSelectRelay,omitempty"`
 	FeeStructure          FeeStructureJSON `json:"feeStructure"`
 	HashedEthereumAddress string           `json:"hashedEthereumAddress"`
 	NullifyingKey         string           `json:"nullifyingKey"`

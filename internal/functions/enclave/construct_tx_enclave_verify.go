@@ -803,7 +803,7 @@ func verifyComputeCalldataHashAndMessage(
 		return
 	}
 
-	relay := payload.Relay
+	relay := response.Relay
 	if relay == "" {
 		relay = constants.ZeroAddress
 	}
@@ -865,8 +865,15 @@ func verifyComputeCalldataHashAndMessage(
 		originalSender = verifyGetOriginalSender(externalAddressOrZero(payload.ExternalAddress), relay)
 	}
 
+	// '' means "same as relay" - mirrors the enclave's own fallback, since callers aren't
+	// guaranteed to pre-resolve it (see the TS constructTxEnclaveVerify.ts equivalent).
+	externalAddress := payload.ExternalAddress
+	if externalAddress == "" {
+		externalAddress = relay
+	}
+
 	calldataHash, err = verifyCreateCallDataHash(
-		chainID, publicSignalCount, relay, payload.ExternalAddress,
+		chainID, publicSignalCount, relay, externalAddress,
 		externalActionIDHash, externalActionMetadata, message,
 		response.EncryptedOutputs, response.OnChainEncryptedOutput,
 		slippageValues, onChainCreation, feeStructure,
@@ -990,7 +997,7 @@ func verifyPrepareTxResponse(chainID int, payload types.PrepareTxRequestType, re
 // carries no amounts, since only the enclave knows which stuck notes exist.
 func verifyStuckWithdrawJobSignedMessageHash(
 	chainID int,
-	hinkalAddress, erc20TokenAddress, relay, externalAddress string,
+	hinkalAddress, erc20TokenAddress, externalAddress string,
 	feeStructure types.FeeStructure,
 	nullifyingKey string,
 	spendingPublicKey [2]string,
@@ -1040,8 +1047,14 @@ func verifyStuckWithdrawJobSignedMessageHash(
 	isTron := constants.IsTronLike(chainID)
 	publicSignalCount := verifyCalcPublicSignalCount(isTron, 1, 1, len(inNullifiersFlat), len(outCommitmentsFlat))
 
+	relay := job.Relay
+	// '' means "same as relay" - mirrors the enclave's own fallback (see verifyComputeCalldataHashAndMessage above).
+	resolvedExternalAddress := externalAddress
+	if resolvedExternalAddress == "" {
+		resolvedExternalAddress = relay
+	}
 	calldataHash, err := verifyCreateCallDataHash(
-		chainID, publicSignalCount, relay, externalAddress,
+		chainID, publicSignalCount, relay, resolvedExternalAddress,
 		big.NewInt(0), "0x00", message,
 		job.EncryptedOutputs, job.OnChainEncryptedOutput,
 		slippageValues, []bool{false}, feeStructure,
@@ -1174,6 +1187,9 @@ func verifyComputeSolanaCalldataHashAndMessage(
 	signer := payload.Signer
 	if signer == "" {
 		signer = payload.RelayAddress
+	}
+	if signer == "" {
+		signer = response.Relay
 	}
 	signerPk, err := solana.PublicKeyFromBase58(signer)
 	if err != nil {
@@ -1360,7 +1376,7 @@ func verifyPrepareSolanaTxResponse(payload types.PrepareSolanaTxRequestType, res
 
 // On-chain-creation never applies to a stuck withdraw.
 func verifySolanaStuckWithdrawJobSignedMessageHash(
-	mintAddress, signer, recipient string,
+	mintAddress, recipient string,
 	feeStructure types.FeeStructure,
 	nullifyingKey string,
 	spendingPublicKey [2]string,
@@ -1415,7 +1431,7 @@ func verifySolanaStuckWithdrawJobSignedMessageHash(
 	if err != nil {
 		return err
 	}
-	signerPk, err := solana.PublicKeyFromBase58(signer)
+	signerPk, err := solana.PublicKeyFromBase58(job.Relay)
 	if err != nil {
 		return err
 	}

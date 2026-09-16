@@ -399,6 +399,10 @@ func UsesNearIntentsBridge(chainID int) bool {
 	return IsSolanaLike(chainID) || IsTronLike(chainID)
 }
 
+func IsNearIntentsBridgeSource(chainID int) bool {
+	return IsSolanaLike(chainID) || chainID == ChainIDs.TronMainnet
+}
+
 func IsSepoliaTestnet(chainID int) bool {
 	return chainID == ChainIDs.SepoliaTestnet
 }

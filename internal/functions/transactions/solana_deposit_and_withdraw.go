@@ -70,10 +70,6 @@ func solanaWithdrawBatchPrepare(
 		return nil, errUserDepositedUtxosEmpty
 	}
 	mintAddress := token.Erc20TokenAddress
-	relay, err := relayerAddress(ctx, hinkal, chainID)
-	if err != nil {
-		return nil, err
-	}
 	withdrawTimeStamp := new(big.Int).SetInt64(utils.GetCurrentTimeInSeconds()).String()
 	transactions := make([]api.SolanaTransactionBody, 0, len(userDepositedUtxos))
 
@@ -121,28 +117,32 @@ func solanaWithdrawBatchPrepare(
 				)
 
 				result, err := SolanaTransact(groupCtx, hinkal, HinkalSolanaTransactParams{
-					ChainID:         chainID,
-					MintAddresses:   []string{mintAddress},
-					AmountChanges:   []*big.Int{new(big.Int).Neg(item.utxo.Amount)},
-					RelayAddress:    relay,
-					Recipient:       item.recipientAddress,
-					Signer:          relay,
-					FunctionName:    "transact",
-					Accounts:        accounts,
-					RelayerFee:      finalFeeStructure.FlatFee,
-					VariableRate:    finalFeeStructure.VariableRate,
-					UseBlockedUtxos: true,
-					InputUtxos:      [][]*utxo.Utxo{withdrawInputUtxos},
-					Speculative:     speculative,
-					Submit:          SolanaTransactSubmit{Mode: SolanaSubmitModeProofOnly},
+					ChainID:              chainID,
+					MintAddresses:        []string{mintAddress},
+					AmountChanges:        []*big.Int{new(big.Int).Neg(item.utxo.Amount)},
+					Recipient:            item.recipientAddress,
+					FunctionName:         "transact",
+					Accounts:             accounts,
+					RelayerFee:           finalFeeStructure.FlatFee,
+					VariableRate:         finalFeeStructure.VariableRate,
+					NeedsRelay:           true,
+					SkipRelayReservation: true,
+					UseBlockedUtxos:      true,
+					InputUtxos:           [][]*utxo.Utxo{withdrawInputUtxos},
+					Speculative:          speculative,
+					Submit:               SolanaTransactSubmit{Mode: SolanaSubmitModeProofOnly},
 				})
+				if err != nil {
+					return err
+				}
+				relayAddress, err := solanaArgsRelayAddress(result.Proof.Args)
 				if err != nil {
 					return err
 				}
 
 				batchTransactions[batchIndex] = api.SolanaTransactionBody{
 					ChainID:                  chainID,
-					RelayAddress:             relay,
+					RelayAddress:             relayAddress,
 					FunctionName:             "transact",
 					RecipientAmount:          recipientAmounts[absoluteIndex].String(),
 					Args:                     result.Proof.Args,
@@ -295,12 +295,8 @@ func HinkalSolanaDepositAndWithdraw(
 	if err != nil {
 		return types.DepositAndSendExtendedResult{}, err
 	}
-	encryptedBlobs, err := buildSolanaDepositEncryptedBlobs(structures, ownEncryptionKeys)
-	if err != nil {
-		return types.DepositAndSendExtendedResult{}, err
-	}
-	depositInstruction, err := buildMultiPaymentDepositInstruction(
-		ctx, connection, programID, signer, originalDeployer, mintAddress, amounts, structures, encryptedBlobs, true, &timeStampSeconds,
+	depositInstruction, err := buildProoflessDepositInstruction(
+		ctx, connection, programID, signer, originalDeployer, mintAddress, amounts, structures, ownEncryptionKeys, true, &timeStampSeconds,
 	)
 	if err != nil {
 		return types.DepositAndSendExtendedResult{}, err

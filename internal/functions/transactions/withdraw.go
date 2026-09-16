@@ -71,6 +71,7 @@ func HinkalWithdraw(
 	isRelayerOff bool,
 	feeToken string,
 	feeStructureOverride *types.FeeStructure,
+	action types.AdminTransactionType,
 ) (types.TransactionRequest, string, error) {
 	chainID, err := pretransaction.ValidateAndGetChainID(erc20Tokens)
 	if err != nil {
@@ -126,21 +127,13 @@ func HinkalWithdraw(
 		}
 	}
 
-	relay := constants.ZeroAddress
-	if !isRelayerOff {
-		relay, err = relayerAddress(ctx, hinkal, chainID)
-		if err != nil {
-			return types.TransactionRequest{}, "", err
-		}
-	}
-
 	externalAddress, err := utils.AddressToHexFormat(recipientAddress)
 	if err != nil {
 		return types.TransactionRequest{}, "", err
 	}
 
 	submit := NewRelayerSubmit(RelayerSubmit{
-		AdminData: pretransaction.ConstructAdminData(types.AdminUnshield, chainID, erc20Addresses, amountChanges, ethereumAddress, nil),
+		AdminData: pretransaction.ConstructAdminData(action, chainID, erc20Addresses, amountChanges, ethereumAddress, nil),
 	})
 	if isRelayerOff {
 		submit = NewSelfSubmit(SelfSubmit{
@@ -157,7 +150,6 @@ func HinkalWithdraw(
 		ExternalActionID: types.ExternalActionZero,
 		ExternalAddress:  externalAddress,
 		FeeStructure:     &feeStructure,
-		Relay:            relay,
 		OriginalSender:   originalSender,
 		Submit:           submit,
 	})

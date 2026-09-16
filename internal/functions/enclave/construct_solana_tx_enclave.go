@@ -24,26 +24,28 @@ func buildPrepareSolanaTxRequest(
 	spendingPublicKey [2]string,
 ) types.PrepareSolanaTxRequestType {
 	req := types.PrepareSolanaTxRequestType{
-		ChainID:            strconv.Itoa(p.ChainID),
-		MintAddresses:      p.MintAddresses,
-		AmountChanges:      bigIntStrings(p.AmountChanges),
-		RelayAddress:       p.RelayAddress,
-		Recipient:          p.Recipient,
-		Signer:             p.Signer,
-		FunctionName:       p.FunctionName,
-		Accounts:           p.Accounts,
-		OnChainCreation:    p.OnChainCreation,
-		HinkalInstructions: p.HinkalInstructions,
-		RemainingAccounts:  p.RemainingAccounts,
-		RecipientAddress:   p.RecipientAddress,
-		RecipientAmounts:   bigIntStrings(p.RecipientAmounts),
-		InputCommitments:   p.InputCommitments,
-		UseBlockedUtxos:    p.UseBlockedUtxos,
-		RecipientAmount:    p.RecipientAmount,
-		DisplayRecipient:   p.DisplayRecipient,
-		Speculative:        p.Speculative,
-		NullifyingKey:      nullifyingKey,
-		SpendingPublicKey:  spendingPublicKey,
+		ChainID:              strconv.Itoa(p.ChainID),
+		MintAddresses:        p.MintAddresses,
+		AmountChanges:        bigIntStrings(p.AmountChanges),
+		RelayAddress:         p.RelayAddress,
+		AutoSelectRelay:      p.AutoSelectRelay,
+		SkipRelayReservation: p.SkipRelayReservation,
+		Recipient:            p.Recipient,
+		Signer:               p.Signer,
+		FunctionName:         p.FunctionName,
+		Accounts:             p.Accounts,
+		OnChainCreation:      p.OnChainCreation,
+		HinkalInstructions:   p.HinkalInstructions,
+		RemainingAccounts:    p.RemainingAccounts,
+		RecipientAddress:     p.RecipientAddress,
+		RecipientAmounts:     bigIntStrings(p.RecipientAmounts),
+		InputCommitments:     p.InputCommitments,
+		UseBlockedUtxos:      p.UseBlockedUtxos,
+		RecipientAmount:      p.RecipientAmount,
+		DisplayRecipient:     p.DisplayRecipient,
+		Speculative:          p.Speculative,
+		NullifyingKey:        nullifyingKey,
+		SpendingPublicKey:    spendingPublicKey,
 	}
 	if p.RelayerFee != nil {
 		req.RelayerFee = p.RelayerFee.String()
@@ -237,6 +239,7 @@ func PrepareSolanaStuckWithdrawEnclaveCall(
 		MintAddress:           params.MintAddress,
 		Recipient:             params.Recipient,
 		RelayAddress:          params.RelayAddress,
+		AutoSelectRelay:       params.AutoSelectRelay,
 		Accounts:              params.Accounts,
 		FeeStructures:         feeStructures,
 		HashedEthereumAddress: params.HashedEthereumAddress,
@@ -266,7 +269,7 @@ func PrepareSolanaStuckWithdrawEnclaveCall(
 		if !ok {
 			return nil, fmt.Errorf("enclave: no feeStructure supplied for nullifierCount %d", nullifierCount)
 		}
-		if err := verifySolanaStuckWithdrawJobSignedMessageHash(params.MintAddress, params.RelayAddress, params.Recipient, feeStructure, nullifyingKey, payload.SpendingPublicKey, job); err != nil {
+		if err := verifySolanaStuckWithdrawJobSignedMessageHash(params.MintAddress, params.Recipient, feeStructure, nullifyingKey, payload.SpendingPublicKey, job); err != nil {
 			return nil, err
 		}
 	}

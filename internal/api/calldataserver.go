@@ -4,7 +4,19 @@ import (
 	"context"
 
 	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
+	"github.com/Hinkal-Protocol/hinkal-go/internal/types"
 )
+
+type emitTxPublicDataBody struct {
+	AdminData *types.AdminDataType `json:"adminData"`
+}
+
+func EmitTxPublicData(ctx context.Context, adminData *types.AdminDataType) error {
+	if adminData == nil {
+		return nil
+	}
+	return Post(ctx, constants.GetDataServerURL()+constants.DataServerConfig.EmitTxPublicData, emitTxPublicDataBody{AdminData: adminData}, nil)
+}
 
 type GetTokenPricesResponse struct {
 	Prices []float64 `json:"prices"`

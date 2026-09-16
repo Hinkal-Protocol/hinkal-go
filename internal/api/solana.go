@@ -23,6 +23,7 @@ type SolanaArgs struct {
 	VariableRate     *string           `json:"variableRate,omitempty"`
 	Dimensions       types.DimDataType `json:"dimensions"`
 	RootHashIndex    string            `json:"rootHashIndex"`
+	RelayAddress     string            `json:"relayAddress"`
 }
 
 type SolanaHinkalInstruction struct {
@@ -95,6 +96,54 @@ func CallRelayerSolanaTransactBatchAPI(ctx context.Context, body SolanaTransacti
 	var resp RelayerBatchResponse
 	if err := Post(ctx, constants.GetRelayerURL()+constants.RelayerConfig.SolanaTransactBatch, body, &resp); err != nil {
 		return RelayerBatchResponse{}, err
+	}
+	return resp, nil
+}
+
+type SolanaSponsoredBuildRequestBody struct {
+	ChainID          int                         `json:"chainId"`
+	Kind             types.SolanaSponsoredTxKind `json:"kind"`
+	TokenAddress     string                      `json:"tokenAddress"`
+	Amount           string                      `json:"amount"`
+	SenderAddress    string                      `json:"senderAddress"`
+	RelayAddress     string                      `json:"relayAddress"`
+	RecipientInfo    string                      `json:"recipientInfo,omitempty"`
+	RecipientAddress string                      `json:"recipientAddress,omitempty"`
+	VariableRate     string                      `json:"variableRate,omitempty"`
+}
+
+type SolanaSponsoredBuildResponse struct {
+	Status       string `json:"status"`
+	Error        string `json:"error,omitempty"`
+	TicketID     string `json:"ticketId,omitempty"`
+	SerializedTx string `json:"serializedTx,omitempty"`
+	Fee          string `json:"fee,omitempty"`
+}
+
+type SolanaSponsoredSubmitRequestBody struct {
+	ChainID      int    `json:"chainId"`
+	TicketID     string `json:"ticketId"`
+	SerializedTx string `json:"serializedTx"`
+}
+
+type SolanaSponsoredSubmitResponse struct {
+	Status string `json:"status"`
+	Error  string `json:"error,omitempty"`
+	TxHash string `json:"txHash,omitempty"`
+}
+
+func CallRelayerSolanaSponsoredBuildAPI(ctx context.Context, body SolanaSponsoredBuildRequestBody) (SolanaSponsoredBuildResponse, error) {
+	var resp SolanaSponsoredBuildResponse
+	if err := Post(ctx, constants.GetRelayerURL()+constants.RelayerConfig.SolanaSponsoredBuild, body, &resp); err != nil {
+		return SolanaSponsoredBuildResponse{}, err
+	}
+	return resp, nil
+}
+
+func CallRelayerSolanaSponsoredSubmitAPI(ctx context.Context, body SolanaSponsoredSubmitRequestBody) (SolanaSponsoredSubmitResponse, error) {
+	var resp SolanaSponsoredSubmitResponse
+	if err := Post(ctx, constants.GetRelayerURL()+constants.RelayerConfig.SolanaSponsoredSubmit, body, &resp); err != nil {
+		return SolanaSponsoredSubmitResponse{}, err
 	}
 	return resp, nil
 }

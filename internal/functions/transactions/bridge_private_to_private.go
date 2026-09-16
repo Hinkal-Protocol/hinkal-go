@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"math"
 	"math/big"
 	"strings"
@@ -15,8 +14,9 @@ import (
 	cryptokeys "github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/crypto-keys"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/hinkal/ihinkal"
 	errorhandling "github.com/Hinkal-Protocol/hinkal-go/internal/error-handling"
+	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/enclave"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/fees"
-	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/onchainutxos"
+	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/integrations"
 	pretransaction "github.com/Hinkal-Protocol/hinkal-go/internal/functions/pre-transaction"
 	privatewallet "github.com/Hinkal-Protocol/hinkal-go/internal/functions/private-wallet"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/utils"
@@ -27,64 +27,110 @@ import (
 
 var errBridgeArrivalTimeout = errors.New("transactions: bridge did not land on destination temp wallet within timeout")
 
-func deriveBridgeTempWallet(hinkal ihinkal.HinkalInternal, chainID int, nonce *big.Int) (types.TemporarySubAccount, error) {
-	privateKey, err := hinkal.GetUserKeys().GetSignerPrivateKeyFromNonce(nonce)
-	if err != nil {
-		return types.TemporarySubAccount{}, err
-	}
-	ethAddress, err := privatewallet.SignerAddressFromPrivateKey(chainID, privateKey)
-	if err != nil {
-		return types.TemporarySubAccount{}, err
-	}
-	return types.TemporarySubAccount{Index: int(nonce.Int64()), EthAddress: ethAddress, PrivateKey: privateKey}, nil
+type bridgeClaimableRecipient struct {
+	Signature  string
+	EthAddress string
+	Keys       *cryptokeys.UserKeys
 }
 
-func hinkalBridgePrivateOut(
+type bridgeResolvedRecipient struct {
+	RecipientInfo string
+	Claimable     *bridgeClaimableRecipient
+}
+
+func resolveBridgeRecipient(hinkal ihinkal.HinkalInternal, recipient bridging.PrivateBridgeRecipient) (bridgeResolvedRecipient, error) {
+	if !recipient.IsClaimable() {
+		return bridgeResolvedRecipient{RecipientInfo: recipient.RecipientInfo}, nil
+	}
+
+	signature, err := hinkal.GetUserKeys().GetClaimableSignatureFromNonce(recipient.ClaimableNonce)
+	if err != nil {
+		return bridgeResolvedRecipient{}, err
+	}
+	keys := cryptokeys.NewUserKeys(signature)
+	recipientInfo, err := pretransaction.GetRecipientInfoFromUserKeys(keys)
+	if err != nil {
+		return bridgeResolvedRecipient{}, err
+	}
+
+	return bridgeResolvedRecipient{
+		RecipientInfo: recipientInfo,
+		Claimable: &bridgeClaimableRecipient{
+			Signature:  signature,
+			EthAddress: recipient.RecipientEthAddress,
+			Keys:       keys,
+		},
+	}, nil
+}
+
+func registerTemporaryWalletNonces(ctx context.Context, hinkal ihinkal.HinkalInternal, nonce *big.Int, chainIDs ...int) error {
+	ethereumAddress, err := hinkal.GetEthereumAddress(ctx)
+	if err != nil {
+		return err
+	}
+	hashedEthereumAddress := utils.HashEthereumAddress(ethereumAddress)
+
+	seen := make(map[int]struct{}, len(chainIDs))
+	for _, chainID := range chainIDs {
+		if _, ok := seen[chainID]; ok {
+			continue
+		}
+		seen[chainID] = struct{}{}
+		if _, err := api.AddTemporaryWalletNonce(ctx, chainID, hashedEthereumAddress, int(nonce.Int64()), types.TemporaryWalletRecoveryDestinationConfidential); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func hinkalLifiBridgePrivateOut(
 	ctx context.Context,
 	hinkal ihinkal.HinkalInternal,
 	sourceToken, destToken types.ERC20Token,
 	amount string,
 	slippage float64,
 	feeToken string,
-) (tempAccount types.TemporarySubAccount, sourceTxHash string, quote types.BridgeQuote, err error) {
+	feeStructureOverride *types.FeeStructure,
+	action types.AdminTransactionType,
+) (bridging.PrivateBridgeOutResult, error) {
 	chainID := sourceToken.ChainID
 	destChainID := destToken.ChainID
 	tokenAddress := sourceToken.Erc20TokenAddress
 
 	lifiRouterAddress, err := constants.LifiRouterAddress(chainID)
 	if err != nil {
-		return types.TemporarySubAccount{}, "", types.BridgeQuote{}, err
+		return bridging.PrivateBridgeOutResult{}, err
 	}
 
 	nonce, err := utils.RandomBigInt(6)
 	if err != nil {
-		return types.TemporarySubAccount{}, "", types.BridgeQuote{}, err
+		return bridging.PrivateBridgeOutResult{}, err
 	}
-	tempAccount, err = deriveBridgeTempWallet(hinkal, chainID, nonce)
+	tempWallets, err := privatewallet.DeriveBridgeTempWallets(hinkal.GetUserKeys(), chainID, destChainID, nonce)
 	if err != nil {
-		return types.TemporarySubAccount{}, "", types.BridgeQuote{}, err
+		return bridging.PrivateBridgeOutResult{}, err
+	}
+	sourceAddress, err := privatewallet.AddressFromSubAccount(chainID, tempWallets.SourceSubAccount)
+	if err != nil {
+		return bridging.PrivateBridgeOutResult{}, err
+	}
+	destinationAddress, err := privatewallet.AddressFromSubAccount(destChainID, tempWallets.DestinationSubAccount)
+	if err != nil {
+		return bridging.PrivateBridgeOutResult{}, err
 	}
 
-	quote, err = web3.GetLifiPrice(ctx, sourceToken, destToken, amount, slippage, tempAccount.EthAddress, tempAccount.EthAddress)
+	quote, err := web3.GetLifiPrice(ctx, sourceToken, destToken, amount, slippage, sourceAddress, destinationAddress)
 	if err != nil {
-		return types.TemporarySubAccount{}, "", types.BridgeQuote{}, err
+		return bridging.PrivateBridgeOutResult{}, err
 	}
 
 	bridgeAmount, err := web3.GetAmountInWei(sourceToken, amount)
 	if err != nil {
-		return types.TemporarySubAccount{}, "", types.BridgeQuote{}, err
+		return bridging.PrivateBridgeOutResult{}, err
 	}
 
-	ethereumAddress, err := hinkal.GetEthereumAddressByChain(ctx, chainID)
-	if err != nil {
-		return types.TemporarySubAccount{}, "", types.BridgeQuote{}, err
-	}
-	hashedEthereumAddress := utils.HashEthereumAddress(ethereumAddress)
-	if _, err := api.AddTemporaryWalletNonce(ctx, chainID, hashedEthereumAddress, tempAccount.Index, types.TemporaryWalletRecoveryDestinationConfidential); err != nil {
-		return types.TemporarySubAccount{}, "", types.BridgeQuote{}, err
-	}
-	if _, err := api.AddTemporaryWalletNonce(ctx, destChainID, hashedEthereumAddress, tempAccount.Index, types.TemporaryWalletRecoveryDestinationConfidential); err != nil {
-		return types.TemporarySubAccount{}, "", types.BridgeQuote{}, err
+	if err := registerTemporaryWalletNonces(ctx, hinkal, nonce, chainID, destChainID); err != nil {
+		return bridging.PrivateBridgeOutResult{}, err
 	}
 
 	nativeFee := quote.NativeFee
@@ -103,18 +149,18 @@ func hinkalBridgePrivateOut(
 	if needsNativeFee {
 		nativeToken, err := web3.GetErc20TokenFromAPI(ctx, chainID, constants.ZeroAddress)
 		if err != nil {
-			return types.TemporarySubAccount{}, "", types.BridgeQuote{}, err
+			return bridging.PrivateBridgeOutResult{}, err
 		}
 		if nativeToken == nil {
-			return types.TemporarySubAccount{}, "", types.BridgeQuote{}, errors.New("transactions: native token not found for bridge fee")
+			return bridging.PrivateBridgeOutResult{}, errors.New("transactions: native token not found for bridge fee")
 		}
 		erc20Tokens = append(erc20Tokens, *nativeToken)
 		deltaChanges = append(deltaChanges, new(big.Int).Neg(nativeFee))
 	}
 
-	ops, err := privatewallet.CreateLifiBridgeOps(chainID, tempAccount.EthAddress, lifiRouterAddress, tokenAddress, bridgeFundingAmount, bridgeAmount, quote)
+	ops, err := privatewallet.CreateLifiBridgeOps(chainID, sourceAddress, lifiRouterAddress, tokenAddress, bridgeFundingAmount, bridgeAmount, quote)
 	if err != nil {
-		return types.TemporarySubAccount{}, "", types.BridgeQuote{}, err
+		return bridging.PrivateBridgeOutResult{}, err
 	}
 
 	emporiumTokenChanges := make([]bridging.TokenChange, len(erc20Tokens))
@@ -128,7 +174,8 @@ func hinkalBridgePrivateOut(
 		resolvedFeeToken = tokenAddress
 	}
 
-	sourceTxHash, err = actionPrivateWallet(
+	sourceSubAccount := tempWallets.SourceSubAccount
+	sourceTxHash, err := actionPrivateWallet(
 		ctx,
 		hinkal,
 		chainID,
@@ -137,19 +184,138 @@ func hinkalBridgePrivateOut(
 		onChainCreation,
 		ops,
 		emporiumTokenChanges,
-		&tempAccount,
+		&sourceSubAccount,
 		resolvedFeeToken,
-		nil,
+		feeStructureOverride,
 		"",
-		types.AdminPrivateToPrivateSend,
+		action,
 		nil,
 	)
-	return tempAccount, sourceTxHash, quote, err
+	if err != nil {
+		return bridging.PrivateBridgeOutResult{}, err
+	}
+
+	return bridging.PrivateBridgeOutResult{
+		TempSubAccount: tempWallets.DestinationSubAccount,
+		SourceTxHash:   sourceTxHash,
+		ExpectedAmount: quote.ExpectedAmount,
+	}, nil
 }
 
-func waitForBridgeArrival(ctx context.Context, destChainID int, tempWalletAddress, destTokenAddress string, quote types.BridgeQuote, slippage float64) (*big.Int, error) {
+func hinkalNearBridgePrivateOut(
+	ctx context.Context,
+	hinkal ihinkal.HinkalInternal,
+	sourceToken, destToken types.ERC20Token,
+	amount string,
+	slippage float64,
+	feeToken string,
+	feeStructureOverride *types.FeeStructure,
+	action types.AdminTransactionType,
+) (bridging.PrivateBridgeOutResult, error) {
+	destChainID := destToken.ChainID
+
+	nonce, err := utils.RandomBigInt(6)
+	if err != nil {
+		return bridging.PrivateBridgeOutResult{}, err
+	}
+	tempSubAccount, err := privatewallet.BuildTempSubAccountForChain(hinkal.GetUserKeys(), destChainID, nonce)
+	if err != nil {
+		return bridging.PrivateBridgeOutResult{}, err
+	}
+	tempWalletAddress, err := privatewallet.AddressFromSubAccount(destChainID, tempSubAccount)
+	if err != nil {
+		return bridging.PrivateBridgeOutResult{}, err
+	}
+
+	if err := registerTemporaryWalletNonces(ctx, hinkal, nonce, destChainID); err != nil {
+		return bridging.PrivateBridgeOutResult{}, err
+	}
+
+	originAsset, err := integrations.ResolveNearAssetID(ctx, sourceToken.ChainID, sourceToken.Erc20TokenAddress)
+	if err != nil {
+		return bridging.PrivateBridgeOutResult{}, err
+	}
+	destinationAsset, err := integrations.ResolveNearAssetID(ctx, destChainID, destToken.Erc20TokenAddress)
+	if err != nil {
+		return bridging.PrivateBridgeOutResult{}, err
+	}
+
+	bridgeAmount, err := web3.GetAmountInWei(sourceToken, amount)
+	if err != nil {
+		return bridging.PrivateBridgeOutResult{}, err
+	}
+
+	slippageBps := int(math.Round(slippage * 10_000))
+	if slippageBps == 0 {
+		slippageBps = constants.NearBridgeSlippageBPS
+	}
+	refundTo, err := hinkal.GetUserKeys().GetNearIntentsAccountID()
+	if err != nil {
+		return bridging.PrivateBridgeOutResult{}, err
+	}
+
+	quoteResp, err := api.GetNearIntentsQuote(ctx, types.NearIntentsQuoteRequest{
+		Dry:               false,
+		SwapType:          "EXACT_INPUT",
+		SlippageTolerance: slippageBps,
+		OriginAsset:       originAsset,
+		DepositType:       "ORIGIN_CHAIN",
+		DestinationAsset:  destinationAsset,
+		Amount:            bridgeAmount.String(),
+		Recipient:         tempWalletAddress,
+		RecipientType:     "DESTINATION_CHAIN",
+		RefundTo:          refundTo,
+		RefundType:        "INTENTS",
+		Deadline:          nearBridgeDeadline(time.Now().UnixMilli()),
+	})
+	if err != nil {
+		return bridging.PrivateBridgeOutResult{}, err
+	}
+	if quoteResp.Quote.DepositAddress == "" {
+		return bridging.PrivateBridgeOutResult{}, errors.New("NEAR Intents quote returned no deposit address")
+	}
+
+	resolvedFeeToken := feeToken
+	if resolvedFeeToken == "" {
+		resolvedFeeToken = sourceToken.Erc20TokenAddress
+	}
+	_, sourceTxHash, err := hinkal.Withdraw(
+		ctx,
+		sourceToken.ChainID,
+		[]string{sourceToken.Erc20TokenAddress},
+		[]*big.Int{new(big.Int).Neg(bridgeAmount)},
+		quoteResp.Quote.DepositAddress,
+		false,
+		resolvedFeeToken,
+		feeStructureOverride,
+		action,
+	)
+	if err != nil {
+		return bridging.PrivateBridgeOutResult{}, err
+	}
+
+	expectedAmount, ok := new(big.Int).SetString(quoteResp.Quote.AmountOut, 10)
+	if !ok {
+		return bridging.PrivateBridgeOutResult{}, fmt.Errorf("transactions: invalid NEAR Intents quote amountOut %q", quoteResp.Quote.AmountOut)
+	}
+
+	return bridging.PrivateBridgeOutResult{
+		TempSubAccount: tempSubAccount,
+		SourceTxHash:   sourceTxHash,
+		ExpectedAmount: expectedAmount,
+	}, nil
+}
+
+func waitForBridgeArrival(
+	ctx context.Context,
+	destChainID int,
+	tempWalletAddress string,
+	destToken types.ERC20Token,
+	expectedAmount *big.Int,
+	slippage float64,
+) (*big.Int, error) {
 	slippageScaled := big.NewInt(int64(math.Round(slippage * float64(constants.SlippageScalingFactor))))
-	minAmount := new(big.Int).Sub(quote.ExpectedAmount, new(big.Int).Quo(new(big.Int).Mul(quote.ExpectedAmount, slippageScaled), big.NewInt(constants.SlippageScalingFactor)))
+	minAmount := new(big.Int).Sub(expectedAmount, new(big.Int).Quo(new(big.Int).Mul(expectedAmount, slippageScaled), big.NewInt(constants.SlippageScalingFactor)))
 	floor := big.NewInt(1)
 	if minAmount.Sign() > 0 {
 		floor = minAmount
@@ -157,7 +323,7 @@ func waitForBridgeArrival(ctx context.Context, destChainID int, tempWalletAddres
 
 	deadline := time.Now().Add(constants.BridgeArrivalTimeout)
 	for time.Now().Before(deadline) {
-		balance, err := web3.GetPublicBalanceByAddress(ctx, destChainID, destTokenAddress, tempWalletAddress)
+		balance, err := web3.GetPublicBalanceByAddress(ctx, destChainID, destToken, tempWalletAddress)
 		if err == nil && balance != nil && balance.Cmp(floor) >= 0 {
 			return balance, nil
 		}
@@ -174,12 +340,52 @@ func hinkalShieldBridgedFunds(
 	ctx context.Context,
 	hinkal ihinkal.HinkalInternal,
 	destToken types.ERC20Token,
-	tempAccount types.TemporarySubAccount,
+	tempSubAccount types.TemporarySubAccount,
 	landedAmount *big.Int,
 	recipient bridging.PrivateBridgeRecipient,
-) (string, *bridging.PendingEnclaveUtxo, error) {
+) (string, *big.Int, error) {
 	destChainID := destToken.ChainID
 	destTokenAddress := destToken.Erc20TokenAddress
+	tempWalletAddress, err := privatewallet.AddressFromSubAccount(destChainID, tempSubAccount)
+	if err != nil {
+		return "", nil, err
+	}
+
+	resolved, err := resolveBridgeRecipient(hinkal, recipient)
+	if err != nil {
+		return "", nil, err
+	}
+
+	// Persist the claimable key before any shield transaction can be submitted.
+	if resolved.Claimable != nil {
+		senderAddress, err := hinkal.GetEthereumAddressByChain(ctx, destChainID)
+		if err != nil {
+			return "", nil, err
+		}
+		shieldedPrivateKey, err := resolved.Claimable.Keys.GetShieldedPrivateKey()
+		if err != nil {
+			return "", nil, err
+		}
+		senderSignature, err := hinkal.GetUserKeys().GetSignature()
+		if err != nil {
+			return "", nil, err
+		}
+		if err := enclave.StoreClaimableKeyInEnclave(
+			ctx,
+			senderAddress,
+			resolved.Claimable.EthAddress,
+			shieldedPrivateKey,
+			destChainID,
+			resolved.Claimable.Signature,
+			senderSignature,
+		); err != nil {
+			return "", nil, err
+		}
+	}
+
+	if constants.IsSolanaLike(destChainID) {
+		return HinkalSolanaSponsoredShield(ctx, hinkal, destToken, tempSubAccount, landedAmount, resolved.RecipientInfo, "", constants.HinkalShieldVariableRate())
+	}
 
 	transferOps, err := privatewallet.CreateTransferEmporiumOpsBatch(destChainID, []string{destTokenAddress}, []*big.Int{landedAmount}, "")
 	if err != nil {
@@ -187,7 +393,7 @@ func hinkalShieldBridgedFunds(
 	}
 	calls := make([]types.CallInfo, len(transferOps))
 	for i, op := range transferOps {
-		call, err := privatewallet.ConvertEmporiumOpToCallInfo(op, tempAccount.EthAddress, destChainID)
+		call, err := privatewallet.ConvertEmporiumOpToCallInfo(op, tempWalletAddress, destChainID)
 		if err != nil {
 			return "", nil, err
 		}
@@ -204,63 +410,12 @@ func hinkalShieldBridgedFunds(
 		return "", nil, errors.New(errorhandling.ErrCodeInsufficientFundsToTransact)
 	}
 
-	var recipientInfo string
-	var claimableKeys *cryptokeys.UserKeys
-	var claimableSignature string
-	if recipient.IsClaimable() {
-		signature, err := hinkal.GetUserKeys().GetClaimableSignatureFromNonce(recipient.ClaimableNonce)
-		if err != nil {
-			return "", nil, err
-		}
-		claimableSignature = signature
-		claimableKeys = cryptokeys.NewUserKeys(signature)
-		recipientInfo, err = pretransaction.GetRecipientInfoFromUserKeys(claimableKeys)
-		if err != nil {
-			return "", nil, err
-		}
-	} else {
-		recipientInfo = recipient.RecipientInfo
-	}
-
-	destTxHash, err := hinkalProxyToPrivate(ctx, hinkal, destChainID, destToken, shieldedAmount, tempAccount, recipientInfo, modifiedFeeStructure.FeeToken, &modifiedFeeStructure, types.AdminPublicToPrivateSend)
+	destTxHash, err := HinkalProxyToPrivate(ctx, hinkal, destChainID, destToken, shieldedAmount, tempSubAccount, resolved.RecipientInfo, modifiedFeeStructure.FeeToken, &modifiedFeeStructure, "")
 	if err != nil {
 		return "", nil, err
 	}
 
-	if claimableKeys == nil {
-		return destTxHash, nil, nil
-	}
-
-	if _, err := hinkal.WaitForTransaction(ctx, destChainID, destTxHash, 1); err != nil {
-		return "", nil, fmt.Errorf("transactions: could not confirm bridge shield tx %s: %w", destTxHash, err)
-	}
-	client, err := hinkal.GetFetchClient(destChainID)
-	if err != nil {
-		return "", nil, err
-	}
-	receipt, err := web3.FetchTransactionReceiptWithRetry(ctx, client, destTxHash)
-	if err != nil {
-		return "", nil, err
-	}
-	utxos, err := onchainutxos.DecodeFromReceipt(receipt, claimableKeys, destChainID, destTokenAddress)
-	if err != nil {
-		return "", nil, err
-	}
-	if len(utxos) == 0 {
-		return "", nil, errors.New("transactions: could not find recipient utxo in bridge shield tx")
-	}
-
-	senderAddress, err := hinkal.GetEthereumAddressByChain(ctx, destChainID)
-	if err != nil {
-		return "", nil, err
-	}
-	return destTxHash, &bridging.PendingEnclaveUtxo{
-		ChainID:            destChainID,
-		SenderAddress:      senderAddress,
-		RecipientAddress:   recipient.RecipientEthAddress,
-		ClaimableSignature: claimableSignature,
-		Utxo:               utxos[0],
-	}, nil
+	return destTxHash, shieldedAmount, nil
 }
 
 func HinkalBridgePrivateToPrivate(
@@ -271,6 +426,8 @@ func HinkalBridgePrivateToPrivate(
 	recipient bridging.PrivateBridgeRecipient,
 	slippage float64,
 	feeToken string,
+	feeStructureOverride *types.FeeStructure,
+	action types.AdminTransactionType,
 ) (bridging.PrivateBridgeResult, error) {
 	if slippage == 0 {
 		slippage = constants.DefaultBridgingSlippageDecimal
@@ -280,13 +437,24 @@ func HinkalBridgePrivateToPrivate(
 		return bridging.PrivateBridgeResult{}, err
 	}
 
-	tempAccount, sourceTxHash, quote, err := hinkalBridgePrivateOut(ctx, hinkal, sourceToken, destToken, amount, slippage, feeToken)
+	var bridgeOut bridging.PrivateBridgeOutResult
+	var err error
+	if constants.IsNearIntentsBridgeSource(sourceToken.ChainID) {
+		bridgeOut, err = hinkalNearBridgePrivateOut(ctx, hinkal, sourceToken, destToken, amount, slippage, feeToken, feeStructureOverride, action)
+	} else {
+		bridgeOut, err = hinkalLifiBridgePrivateOut(ctx, hinkal, sourceToken, destToken, amount, slippage, feeToken, feeStructureOverride, action)
+	}
 	if err != nil {
 		return bridging.PrivateBridgeResult{}, err
 	}
 
 	destChainID := destToken.ChainID
-	bridgedAmount, err := waitForBridgeArrival(ctx, destChainID, tempAccount.EthAddress, destToken.Erc20TokenAddress, quote, slippage)
+	tempWalletAddress, err := privatewallet.AddressFromSubAccount(destChainID, bridgeOut.TempSubAccount)
+	if err != nil {
+		return bridging.PrivateBridgeResult{}, err
+	}
+
+	bridgedAmount, err := waitForBridgeArrival(ctx, destChainID, tempWalletAddress, destToken, bridgeOut.ExpectedAmount, slippage)
 	if err != nil {
 		return bridging.PrivateBridgeResult{}, err
 	}
@@ -295,24 +463,14 @@ func HinkalBridgePrivateToPrivate(
 		return bridging.PrivateBridgeResult{}, err
 	}
 
-	destTxHash, pendingEnclaveUtxo, err := hinkalShieldBridgedFunds(ctx, hinkal, destToken, tempAccount, bridgedAmount, recipient)
+	destTxHash, shieldedAmount, err := hinkalShieldBridgedFunds(ctx, hinkal, destToken, bridgeOut.TempSubAccount, bridgedAmount, recipient)
 	if err != nil {
 		return bridging.PrivateBridgeResult{}, err
 	}
 
-	sourceChainID := sourceToken.ChainID
-	ethereumAddress, err := hinkal.GetEthereumAddressByChain(ctx, sourceChainID)
-	if err != nil {
-		log.Printf("bridgePrivateToPrivate: failed to resolve ethereum address for temp-wallet nonce cleanup: %v", err)
-	} else {
-		hashedEthereumAddress := utils.HashEthereumAddress(ethereumAddress)
-		if _, err := api.RemoveTemporaryWalletNonce(ctx, sourceChainID, hashedEthereumAddress, tempAccount.Index); err != nil {
-			log.Printf("bridgePrivateToPrivate: failed to remove temp-wallet nonce on chain %d: %v", sourceChainID, err)
-		}
-		if _, err := api.RemoveTemporaryWalletNonce(ctx, destChainID, hashedEthereumAddress, tempAccount.Index); err != nil {
-			log.Printf("bridgePrivateToPrivate: failed to remove temp-wallet nonce on chain %d: %v", destChainID, err)
-		}
-	}
-
-	return bridging.PrivateBridgeResult{SourceTxHash: sourceTxHash, DestTxHash: destTxHash, PendingEnclaveUtxo: pendingEnclaveUtxo}, nil
+	return bridging.PrivateBridgeResult{
+		SourceTxHash:           bridgeOut.SourceTxHash,
+		DestTxHash:             destTxHash,
+		DestinationTokenAmount: shieldedAmount.String(),
+	}, nil
 }

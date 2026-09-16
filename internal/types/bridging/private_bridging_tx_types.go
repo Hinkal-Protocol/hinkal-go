@@ -3,7 +3,6 @@ package bridging
 import (
 	"math/big"
 
-	"github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/utxo"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/types"
 )
 
@@ -28,16 +27,14 @@ type TokenChange struct {
 	Amount *big.Int
 }
 
-type PendingEnclaveUtxo struct {
-	ChainID            int
-	SenderAddress      string
-	RecipientAddress   string
-	ClaimableSignature string
-	Utxo               *utxo.Utxo
+type PrivateBridgeOutResult struct {
+	TempSubAccount types.TemporarySubAccount
+	SourceTxHash   string
+	ExpectedAmount *big.Int
 }
 
 type PrivateBridgeResult struct {
-	SourceTxHash       string
-	DestTxHash         string
-	PendingEnclaveUtxo *PendingEnclaveUtxo
+	SourceTxHash           string
+	DestTxHash             string
+	DestinationTokenAmount string
 }

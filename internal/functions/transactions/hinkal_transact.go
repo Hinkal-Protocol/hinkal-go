@@ -257,6 +257,8 @@ func prepareEnclaveJob(
 		ExternalAddress:        params.ExternalAddress,
 		OriginalSender:         params.OriginalSender,
 		Relay:                  params.Relay,
+		AutoSelectRelay:        params.AutoSelectRelay,
+		SkipRelayReservation:   params.SkipRelayReservation,
 		FeeStructure:           params.FeeStructure,
 		ExternalActionID:       params.ExternalActionID,
 		ExternalActionMetadata: externalActionMetadata,
@@ -313,9 +315,34 @@ func submitAndConfirm(
 	return result, nil
 }
 
-func HinkalTransact(ctx context.Context, hinkal ihinkal.HinkalInternal, params HinkalTransactParams) (TransactResult, error) {
-	if params.UserKeys != nil && params.InputUtxos == nil {
+// resolveTransactRelay fetches a relay when the transaction actually needs one and the caller
+// hasn't already pinned one - deferring to henclave's own pick when it builds the proof remotely.
+func resolveTransactRelay(ctx context.Context, hinkal ihinkal.HinkalInternal, params HinkalTransactParams) (HinkalTransactParams, error) {
+	wantsRelay := params.Submit.Mode == SubmitModeRelayer || params.NeedsRelay
+	if !wantsRelay || params.Relay != "" {
+		return params, nil
+	}
+
+	resolved, err := pretransaction.ResolveRelay(ctx, hinkal, params.ChainID, params.SkipRelayReservation)
+	if err != nil {
+		return HinkalTransactParams{}, err
+	}
+	params.Relay = resolved.Relay
+	params.AutoSelectRelay = resolved.AutoSelectRelay
+	if params.ExternalAddress == "" {
+		params.ExternalAddress = resolved.Relay
+	}
+	return params, nil
+}
+
+func HinkalTransact(ctx context.Context, hinkal ihinkal.HinkalInternal, paramsInput HinkalTransactParams) (TransactResult, error) {
+	if paramsInput.UserKeys != nil && paramsInput.InputUtxos == nil {
 		return TransactResult{}, errTransactUserKeysNeedInputUtxos
+	}
+
+	params, err := resolveTransactRelay(ctx, hinkal, paramsInput)
+	if err != nil {
+		return TransactResult{}, err
 	}
 
 	userKeys := params.UserKeys

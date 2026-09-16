@@ -11,7 +11,7 @@ import (
 	"github.com/Hinkal-Protocol/hinkal-go/internal/types/bridging"
 )
 
-func hinkalProxyToPrivate(
+func HinkalProxyToPrivate(
 	ctx context.Context,
 	hinkal ihinkal.HinkalInternal,
 	chainID int,

@@ -120,10 +120,6 @@ func HinkalSolanaSwap(
 		return "", errorhandling.ErrLowOutputAmount
 	}
 
-	relay, err := relayerAddress(ctx, hinkal, chainID)
-	if err != nil {
-		return "", err
-	}
 	swapperAccount, err := web3.GetSwapperAccountPublicKeyFromSalt(hinkalProgramAddress, originalDeployer, swapperAccountSalt)
 	if err != nil {
 		return "", err
@@ -163,9 +159,7 @@ func HinkalSolanaSwap(
 		ChainID:            chainID,
 		MintAddresses:      mintAddresses,
 		AmountChanges:      amountChanges,
-		RelayAddress:       relay,
 		Recipient:          recipient.String(),
-		Signer:             relay,
 		FunctionName:       "swap",
 		Accounts:           accounts,
 		OnChainCreation:    []bool{false, true},

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"math/big"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/Hinkal-Protocol/hinkal-go/internal/api"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/hinkal/ihinkal"
@@ -87,27 +89,35 @@ func HinkalTransfer(
 		return "", errorhandling.ErrRecipientFormatIncorrect
 	}
 
-	amountChanges := pretransaction.ModifyVolatileTokenAmountChanges(ctx, chainID, erc20Tokens, copyBigInts(amountChangesBase), "")
 	erc20Addresses := tokenAddresses(erc20Tokens)
 	sentToken := erc20Tokens[0]
-	recipientAmount := new(big.Int).Neg(amountChanges[0])
 
-	feeStructure, err := resolveTransferFeeStructure(ctx, chainID, feeToken, erc20Addresses, sentToken, recipientAmount, feeStructureOverride, nil)
-	if err != nil {
+	var ethereumAddress string
+	var amountChanges []*big.Int
+	var recipientAmount *big.Int
+	var feeStructure types.FeeStructure
+	group, groupCtx := errgroup.WithContext(ctx)
+	group.Go(func() (err error) {
+		ethereumAddress, err = hinkal.GetEthereumAddressByChain(groupCtx, chainID)
+		return err
+	})
+	group.Go(func() error {
+		amountChanges = pretransaction.ModifyVolatileTokenAmountChanges(groupCtx, chainID, erc20Tokens, copyBigInts(amountChangesBase), "")
+		recipientAmount = new(big.Int).Neg(amountChanges[0])
+		resolved, err := resolveTransferFeeStructure(groupCtx, chainID, feeToken, erc20Addresses, sentToken, recipientAmount, feeStructureOverride, nil)
+		if err != nil {
+			return err
+		}
+		feeStructure = resolved
+		return nil
+	})
+	if err := group.Wait(); err != nil {
 		return "", err
 	}
 	if err := pretransaction.MergeWithFeeStructure(ctx, chainID, &erc20Addresses, &amountChanges, feeStructure); err != nil {
 		return "", err
 	}
 
-	relay, err := relayerAddress(ctx, hinkal, chainID)
-	if err != nil {
-		return "", err
-	}
-	ethereumAddress, err := hinkal.GetEthereumAddressByChain(ctx, chainID)
-	if err != nil {
-		return "", err
-	}
 	adminData := pretransaction.ConstructAdminData(types.AdminPrivateToPrivateSend, chainID, erc20Addresses, amountChanges, ethereumAddress, nil)
 
 	result, err := HinkalTransact(ctx, hinkal, HinkalTransactParams{
@@ -115,9 +125,9 @@ func HinkalTransfer(
 		Erc20Addresses:   erc20Addresses,
 		AmountChanges:    amountChanges,
 		ExternalActionID: types.ExternalActionZero,
-		ExternalAddress:  relay,
+		// Always the relay for a private send; HinkalTransact resolves it once it has one.
+		ExternalAddress:  "",
 		FeeStructure:     &feeStructure,
-		Relay:            relay,
 		RecipientAddress: recipientAddress,
 		RecipientAmounts: transferRecipientAmounts(erc20Addresses, recipientAmount),
 		Submit:           NewRelayerSubmit(RelayerSubmit{AdminData: adminData}),

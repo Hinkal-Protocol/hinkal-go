@@ -96,6 +96,8 @@ func buildPrepareTxRequest(p types.PrepareTxParams, nullifyingKey string, spendi
 		ExternalAddress:        p.ExternalAddress,
 		OriginalSender:         p.OriginalSender,
 		Relay:                  p.Relay,
+		AutoSelectRelay:        p.AutoSelectRelay,
+		SkipRelayReservation:   p.SkipRelayReservation,
 		ExternalActionID:       string(p.ExternalActionID),
 		ExternalActionMetadata: p.ExternalActionMetadata,
 		OnChainCreation:        p.OnChainCreation,
@@ -207,6 +209,7 @@ type PrepareStuckWithdrawParams struct {
 	Erc20Address          string
 	ExternalAddress       string
 	Relay                 string
+	AutoSelectRelay       bool
 	FeeStructure          types.FeeStructure
 	HashedEthereumAddress string
 }
@@ -230,6 +233,7 @@ func PrepareStuckWithdrawEnclaveCall(ctx context.Context, uk *cryptokeys.UserKey
 		Erc20Address:    params.Erc20Address,
 		ExternalAddress: params.ExternalAddress,
 		Relay:           params.Relay,
+		AutoSelectRelay: params.AutoSelectRelay,
 		FeeStructure: types.FeeStructureJSON{
 			FeeToken:     params.FeeStructure.FeeToken,
 			FlatFee:      params.FeeStructure.FlatFee.String(),
@@ -247,7 +251,7 @@ func PrepareStuckWithdrawEnclaveCall(ctx context.Context, uk *cryptokeys.UserKey
 		return nil, err
 	}
 	for _, job := range resp.Jobs {
-		if err := verifyStuckWithdrawJobSignedMessageHash(params.ChainID, hinkalAddress, params.Erc20Address, params.Relay, params.ExternalAddress, params.FeeStructure, nullifyingKey, payload.SpendingPublicKey, job); err != nil {
+		if err := verifyStuckWithdrawJobSignedMessageHash(params.ChainID, hinkalAddress, params.Erc20Address, params.ExternalAddress, params.FeeStructure, nullifyingKey, payload.SpendingPublicKey, job); err != nil {
 			return nil, err
 		}
 	}

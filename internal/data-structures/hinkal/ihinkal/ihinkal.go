@@ -77,9 +77,9 @@ type IHinkal interface {
 	GetReceiveVaultAccount(ctx context.Context) (types.ReceiveVaultAccount, error)
 	RecoverReceiveVault(ctx context.Context, record types.ReceiveVaultRecord, token string, to string, returnTxData bool, chainID int) (types.TransactionRequest, string, error)
 	ClaimUtxo(ctx context.Context, chainID int, erc20Address string, claimableUtxo *utxo.Utxo, feeStructureOverride *types.FeeStructure, claimableSignature string) (string, error)
-	Withdraw(ctx context.Context, chainID int, erc20Addresses []string, amountChanges []*big.Int, recipientAddress string, isRelayerOff bool, feeToken string, feeStructureOverride *types.FeeStructure) (types.TransactionRequest, string, error)
+	Withdraw(ctx context.Context, chainID int, erc20Addresses []string, amountChanges []*big.Int, recipientAddress string, isRelayerOff bool, feeToken string, feeStructureOverride *types.FeeStructure, action types.AdminTransactionType) (types.TransactionRequest, string, error)
 	Swap(ctx context.Context, chainID int, erc20Addresses []string, deltaAmounts []*big.Int, externalActionID types.ExternalActionID, swapData string, feeToken string, feeStructureOverride *types.FeeStructure) (string, error)
-	BridgePrivateToPrivate(ctx context.Context, sourceChainID int, sourceTokenAddress string, destChainID int, destTokenAddress string, amount string, recipient bridging.PrivateBridgeRecipient, slippage float64, feeToken string) (bridging.PrivateBridgeResult, error)
+	BridgePrivateToPrivate(ctx context.Context, sourceChainID int, sourceTokenAddress string, destChainID int, destTokenAddress string, amount string, recipient bridging.PrivateBridgeRecipient, slippage float64, feeToken string, feeStructureOverride *types.FeeStructure, action types.AdminTransactionType) (bridging.PrivateBridgeResult, error)
 	InitUserKeysWithEnclaveSignature(ctx context.Context, mode types.LoginMessageMode) error
 	GetFeeStructure(ctx context.Context, chainID int, feeTokenAddress string, erc20Addresses []string, externalActionID types.ExternalActionID, calls []types.CallInfo, variableRate *big.Int, solanaTransactionParams *api.SolanaGasEstimateParams) (types.FeeStructure, error)
 	EmporiumOp(contract, callDataString string, invokeWallet bool, value *big.Int) (string, error)

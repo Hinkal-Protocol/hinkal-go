@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -22,7 +23,11 @@ type emporiumMetadataTuple struct {
 	S             [32]byte
 	SignerAddress common.Address
 	Ops           []emporiumOperation
+	MaxFee        *big.Int
+	Deadline      *big.Int
 }
+
+const emporiumSignatureDefaultTTL = 20 * time.Minute
 
 var emporiumOpComponents = []abi.ArgumentMarshaling{
 	{Name: "endpoint", Type: "address"},
@@ -38,22 +43,31 @@ func EncodeEmporiumMetadata(
 	ops []string,
 	emporiumMessage *big.Int,
 	signerAddress string,
+	maxFee *big.Int,
 ) (string, error) {
 	if emporiumMessage == nil {
 		emporiumMessage = big.NewInt(0)
 	}
-	if signerAddress == "" {
-		signerAddress = constants.ZeroAddress
-	}
 
 	var v uint8
 	var r, s [32]byte
-	if privateKey != "" {
+	deadline := big.NewInt(0)
+	if privateKey != "" && signerAddress != "" {
+		if maxFee == nil {
+			return "", errors.New("privatewallet: maxFee required if making tx from emporium")
+		}
+		deadline = big.NewInt(time.Now().Add(emporiumSignatureDefaultTTL).Unix())
 		var err error
-		v, r, s, err = signEmporium(chainID, emporiumAddress, privateKey, ops, emporiumMessage)
+		v, r, s, err = signEmporium(chainID, emporiumAddress, privateKey, ops, emporiumMessage, maxFee, deadline)
 		if err != nil {
 			return "", err
 		}
+	}
+	if signerAddress == "" {
+		signerAddress = constants.ZeroAddress
+	}
+	if maxFee == nil {
+		maxFee = big.NewInt(0)
 	}
 
 	opStructs := make([]emporiumOperation, len(ops))
@@ -71,6 +85,8 @@ func EncodeEmporiumMetadata(
 		{Name: "s", Type: "bytes32"},
 		{Name: "signerAddress", Type: "address"},
 		{Name: "ops", Type: "tuple[]", Components: emporiumOpComponents},
+		{Name: "maxFee", Type: "uint256"},
+		{Name: "deadline", Type: "uint256"},
 	})
 	if err != nil {
 		return "", fmt.Errorf("emporium metadata tuple type: %w", err)
@@ -82,6 +98,8 @@ func EncodeEmporiumMetadata(
 		S:             s,
 		SignerAddress: common.HexToAddress(signerAddress),
 		Ops:           opStructs,
+		MaxFee:        maxFee,
+		Deadline:      deadline,
 	})
 	if err != nil {
 		return "", fmt.Errorf("emporium metadata pack: %w", err)
@@ -96,6 +114,8 @@ func signEmporium(
 	privateKey string,
 	ops []string,
 	emporiumMessage *big.Int,
+	maxFee *big.Int,
+	deadline *big.Int,
 ) (uint8, [32]byte, [32]byte, error) {
 	var r, s [32]byte
 	if constants.IsSolanaLike(chainID) {
@@ -132,6 +152,8 @@ func signEmporium(
 			"EmporiumSignature": {
 				{Name: "message", Type: "uint256"},
 				{Name: "ops", Type: "EmporiumOperation[]"},
+				{Name: "maxFee", Type: "uint256"},
+				{Name: "deadline", Type: "uint256"},
 			},
 			"EmporiumOperation": {
 				{Name: "endpoint", Type: "address"},
@@ -148,8 +170,10 @@ func signEmporium(
 			VerifyingContract: emporiumAddress,
 		},
 		Message: apitypes.TypedDataMessage{
-			"message": emporiumMessage.String(),
-			"ops":     opsValues,
+			"message":  emporiumMessage.String(),
+			"ops":      opsValues,
+			"maxFee":   maxFee.String(),
+			"deadline": deadline.String(),
 		},
 	}
 
@@ -177,7 +201,7 @@ func signEmporium(
 
 func SignerAddressFromPrivateKey(chainID int, privateKey string) (string, error) {
 	if constants.IsSolanaLike(chainID) {
-		return "", errors.New("privatewallet: solana signer address derivation not implemented")
+		return SolanaSignerAddressFromPrivateKey(privateKey)
 	}
 	key, err := gethcrypto.HexToECDSA(strings.TrimPrefix(privateKey, "0x"))
 	if err != nil {

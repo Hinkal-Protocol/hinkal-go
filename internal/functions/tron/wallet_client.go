@@ -8,6 +8,7 @@ import (
 
 	"github.com/Hinkal-Protocol/hinkal-go/internal/api"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
+	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/utils"
 )
 
 type WalletClient struct {
@@ -221,4 +222,79 @@ func (c *WalletClient) GetNowBlockNumber(ctx context.Context) (int64, error) {
 		return 0, fmt.Errorf("tron getnowblock: %w", err)
 	}
 	return resp.BlockHeader.RawData.Number, nil
+}
+
+type accountAssetsResponse struct {
+	Data []struct {
+		Balance int64               `json:"balance"`
+		Trc20   []map[string]string `json:"trc20"`
+	} `json:"data"`
+}
+
+const trc20TransferHistoryLimit = 200
+
+type trc20TransferHistoryResponse struct {
+	Data []struct {
+		TokenInfo struct {
+			Address string `json:"address"`
+		} `json:"token_info"`
+	} `json:"data"`
+}
+
+// getHeldTokenAddressesFromTransferHistory mirrors the TS getTronTokenAddressesFromTransferHistory
+func (c *WalletClient) getHeldTokenAddressesFromTransferHistory(ctx context.Context, base58Address string) ([]string, error) {
+	var resp trc20TransferHistoryResponse
+	url := fmt.Sprintf(
+		"%s/v1/accounts/%s/transactions/trc20?only_to=true&limit=%d",
+		c.walletHost, base58Address, trc20TransferHistoryLimit,
+	)
+	if err := api.Get(ctx, url, &resp); err != nil {
+		return nil, fmt.Errorf("tron get trc20 transfer history: %w", err)
+	}
+
+	seen := map[string]bool{}
+	tokens := make([]string, 0, len(resp.Data))
+	for _, transfer := range resp.Data {
+		if transfer.TokenInfo.Address == "" {
+			continue
+		}
+		hexAddress, err := utils.AddressToHexFormat(transfer.TokenInfo.Address)
+		if err != nil || seen[hexAddress] {
+			continue
+		}
+		seen[hexAddress] = true
+		tokens = append(tokens, hexAddress)
+	}
+	return tokens, nil
+}
+
+// GetHeldTokenAddresses mirrors the TS getTronWalletTokenAddresses
+func (c *WalletClient) GetHeldTokenAddresses(ctx context.Context, base58Address string) ([]string, error) {
+	var resp accountAssetsResponse
+	if err := api.Get(ctx, c.walletHost+"/v1/accounts/"+base58Address, &resp); err != nil {
+		return nil, fmt.Errorf("tron get account assets: %w", err)
+	}
+	if len(resp.Data) == 0 {
+		return c.getHeldTokenAddressesFromTransferHistory(ctx, base58Address)
+	}
+	account := resp.Data[0]
+
+	tokens := make([]string, 0, len(account.Trc20)+1)
+	if account.Balance > 0 {
+		tokens = append(tokens, constants.ZeroAddress)
+	}
+	for _, entry := range account.Trc20 {
+		for tokenBase58, balanceStr := range entry {
+			balance, ok := new(big.Int).SetString(balanceStr, 10)
+			if !ok || balance.Sign() <= 0 {
+				continue
+			}
+			hexAddress, err := utils.AddressToHexFormat(tokenBase58)
+			if err != nil {
+				continue
+			}
+			tokens = append(tokens, hexAddress)
+		}
+	}
+	return tokens, nil
 }

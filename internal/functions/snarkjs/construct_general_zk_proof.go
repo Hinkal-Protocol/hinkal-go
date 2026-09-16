@@ -224,7 +224,7 @@ func ConstructZkProof(ctx context.Context, params ConstructZkProofParams) (Const
 			}
 		}
 		externalActionMetadata2, err = privatewallet.EncodeEmporiumMetadata(
-			chainID, emporiumAddress, params.SubAccountPrivateKey, metadataOps, emporiumMessage, subAccountSignerAddress,
+			chainID, emporiumAddress, params.SubAccountPrivateKey, metadataOps, emporiumMessage, subAccountSignerAddress, params.FeeStructure.FlatFee,
 		)
 		if err != nil {
 			return ConstructZkProofResult{}, err

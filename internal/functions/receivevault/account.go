@@ -21,6 +21,7 @@ import (
 	utxoimpl "github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/utxo"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/addresses"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/enclave"
+	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/tron"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/utils"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/web3"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/types"
@@ -280,7 +281,9 @@ func vaultBalance(ctx context.Context, vaultAddress string, chainID int, token t
 	if err != nil {
 		return nil, err
 	}
-	return web3.GetPublicBalanceByAddress(ctx, chainID, tokenHex, addressHex)
+	hexToken := token
+	hexToken.Erc20TokenAddress = tokenHex
+	return web3.GetPublicBalanceByAddress(ctx, chainID, hexToken, addressHex)
 }
 
 func solanaClient(chainID int) (*rpc.Client, error) {
@@ -394,6 +397,31 @@ func solanaHeldTokenAddresses(ctx context.Context, chainID int, vaultAddress str
 	return tokens, nil
 }
 
+// discoverHeldTokenAddresses mirrors the TS receive-vault-scan.utils.ts discoverHeldTokens: every
+// token address the vault currently (or, for EVM, ever) held a balance of, per network.
+func discoverHeldTokenAddresses(ctx context.Context, chainID int, vaultAddress string) ([]string, error) {
+	switch {
+	case constants.IsSolanaLike(chainID):
+		return solanaHeldTokenAddresses(ctx, chainID, vaultAddress)
+	case constants.IsTronLike(chainID):
+		return tronHeldTokenAddresses(ctx, chainID, vaultAddress)
+	default:
+		return web3.GetEvmWalletTokenAddresses(ctx, chainID, vaultAddress)
+	}
+}
+
+func tronHeldTokenAddresses(ctx context.Context, chainID int, vaultAddress string) ([]string, error) {
+	client, err := tron.NewWalletClient(chainID)
+	if err != nil {
+		return nil, err
+	}
+	base58Address, err := utils.ToTronBase58IfHex(vaultAddress)
+	if err != nil {
+		return nil, err
+	}
+	return client.GetHeldTokenAddresses(ctx, base58Address)
+}
+
 func scanTargets(
 	ctx context.Context,
 	records []types.ReceiveVaultRecord,
@@ -418,12 +446,9 @@ func scanTargets(
 
 	for _, record := range records {
 		for _, chainID := range ReceiveVaultChainsForNetwork(record.Network) {
-			if !constants.IsSolanaLike(chainID) {
-				continue
-			}
-			heldTokens, err := solanaHeldTokenAddresses(ctx, chainID, record.VaultAddress)
+			heldTokens, err := discoverHeldTokenAddresses(ctx, chainID, record.VaultAddress)
 			if err != nil {
-				log.Printf("receive vault: Solana token discovery failed: %v", err)
+				log.Printf("receive vault: token discovery failed on chain %d: %v", chainID, err)
 				continue
 			}
 			shieldable, err := web3.GetErc20TokensForChainAPI(ctx, chainID)
@@ -434,7 +459,7 @@ func scanTargets(
 			for _, heldToken := range heldTokens {
 				supported := false
 				for _, token := range shieldable {
-					if token.Erc20TokenAddress == heldToken && !token.Is2022Program {
+					if addresses.Equal(chainID, token.Erc20TokenAddress, heldToken) && !token.Is2022Program {
 						supported = true
 						break
 					}

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/big"
 
 	solana "github.com/gagliardetto/solana-go"
@@ -83,31 +84,55 @@ type SolanaTransactResult struct {
 // InputUtxos and OutputUtxos are overrides; when nil they are derived the same way every flow
 // derived them before. UserKeys defaults to the account's own keys; claims pass a throwaway pair.
 type HinkalSolanaTransactParams struct {
-	ChainID            int
-	MintAddresses      []string
-	AmountChanges      []*big.Int
-	RelayAddress       string
-	Recipient          string
-	Signer             string
-	FunctionName       string
-	Accounts           any
-	OnChainCreation    []bool
-	RelayerFee         *big.Int
-	VariableRate       *big.Int
-	SwapperAccountSalt *big.Int
-	HinkalInstructions []solanautils.HinkalInstruction
-	RemainingAccounts  []solana.AccountMeta
-	RecipientAddress   string
-	RecipientAmounts   []*big.Int
-	UseBlockedUtxos    bool
-	MessageSeed        *big.Int
-	RecipientAmount    string
-	DisplayRecipient   string
-	Speculative        *types.SpeculativeTreeParams
-	InputUtxos         [][]*utxo.Utxo
-	UserKeys           *cryptokeys.UserKeys
-	Submit             SolanaTransactSubmit
-	OnTxConfirm        func(SolanaTransactNotes) error
+	ChainID              int
+	MintAddresses        []string
+	AmountChanges        []*big.Int
+	RelayAddress         string
+	AutoSelectRelay      bool
+	Recipient            string
+	Signer               string
+	FunctionName         string
+	Accounts             any
+	OnChainCreation      []bool
+	RelayerFee           *big.Int
+	VariableRate         *big.Int
+	SwapperAccountSalt   *big.Int
+	HinkalInstructions   []solanautils.HinkalInstruction
+	RemainingAccounts    []solana.AccountMeta
+	RecipientAddress     string
+	RecipientAmounts     []*big.Int
+	UseBlockedUtxos      bool
+	MessageSeed          *big.Int
+	RecipientAmount      string
+	DisplayRecipient     string
+	Speculative          *types.SpeculativeTreeParams
+	InputUtxos           [][]*utxo.Utxo
+	UserKeys             *cryptokeys.UserKeys
+	Submit               SolanaTransactSubmit
+	NeedsRelay           bool
+	SkipRelayReservation bool
+	OnTxConfirm          func(SolanaTransactNotes) error
+}
+
+// solanaArgsRelayAddress reads the relay address baked into a built proof's args - a typed
+// api.SolanaArgs/api.SolanaSwapArgs on the local-proof path, or raw JSON echoed back by henclave.
+func solanaArgsRelayAddress(args any) (string, error) {
+	switch v := args.(type) {
+	case api.SolanaArgs:
+		return v.RelayAddress, nil
+	case api.SolanaSwapArgs:
+		return v.RelayAddress, nil
+	case json.RawMessage:
+		var parsed struct {
+			RelayAddress string `json:"relayAddress"`
+		}
+		if err := json.Unmarshal(v, &parsed); err != nil {
+			return "", err
+		}
+		return parsed.RelayAddress, nil
+	default:
+		return "", fmt.Errorf("transactions: unrecognized solana proof args type %T", args)
+	}
 }
 
 func resolveSolanaInputUtxos(
@@ -223,6 +248,7 @@ func buildSolanaProofLocally(
 		RelayerFee:       relayerFee.String(),
 		Dimensions:       dimensions,
 		RootHashIndex:    proof.RootHashHinkalIndex.String(),
+		RelayAddress:     params.RelayAddress,
 	}
 
 	if params.FunctionName == "swap" {
@@ -340,28 +366,30 @@ func prepareSolanaEnclaveJob(
 	}
 
 	prepared, err := enclave.PrepareSolanaTxEnclaveCall(ctx, userKeys, types.PrepareSolanaTxParams{
-		ChainID:            params.ChainID,
-		MintAddresses:      params.MintAddresses,
-		AmountChanges:      params.AmountChanges,
-		RelayAddress:       params.RelayAddress,
-		Recipient:          params.Recipient,
-		Signer:             params.Signer,
-		FunctionName:       params.FunctionName,
-		Accounts:           accounts,
-		OnChainCreation:    params.OnChainCreation,
-		RelayerFee:         params.RelayerFee,
-		VariableRate:       params.VariableRate,
-		SwapperAccountSalt: params.SwapperAccountSalt,
-		HinkalInstructions: hinkalInstructionsToEnclave(params.HinkalInstructions),
-		RemainingAccounts:  remainingAccountsToEnclave(params.RemainingAccounts),
-		RecipientAddress:   params.RecipientAddress,
-		RecipientAmounts:   params.RecipientAmounts,
-		InputCommitments:   inputCommitments,
-		UseBlockedUtxos:    params.UseBlockedUtxos,
-		MessageSeed:        params.MessageSeed,
-		RecipientAmount:    params.RecipientAmount,
-		DisplayRecipient:   params.DisplayRecipient,
-		Speculative:        params.Speculative,
+		ChainID:              params.ChainID,
+		MintAddresses:        params.MintAddresses,
+		AmountChanges:        params.AmountChanges,
+		RelayAddress:         params.RelayAddress,
+		AutoSelectRelay:      params.AutoSelectRelay,
+		SkipRelayReservation: params.SkipRelayReservation,
+		Recipient:            params.Recipient,
+		Signer:               params.Signer,
+		FunctionName:         params.FunctionName,
+		Accounts:             accounts,
+		OnChainCreation:      params.OnChainCreation,
+		RelayerFee:           params.RelayerFee,
+		VariableRate:         params.VariableRate,
+		SwapperAccountSalt:   params.SwapperAccountSalt,
+		HinkalInstructions:   hinkalInstructionsToEnclave(params.HinkalInstructions),
+		RemainingAccounts:    remainingAccountsToEnclave(params.RemainingAccounts),
+		RecipientAddress:     params.RecipientAddress,
+		RecipientAmounts:     params.RecipientAmounts,
+		InputCommitments:     inputCommitments,
+		UseBlockedUtxos:      params.UseBlockedUtxos,
+		MessageSeed:          params.MessageSeed,
+		RecipientAmount:      params.RecipientAmount,
+		DisplayRecipient:     params.DisplayRecipient,
+		Speculative:          params.Speculative,
 	})
 	if err != nil {
 		return "", types.EddsaSignature{}, err
@@ -397,15 +425,42 @@ func submitSolanaProof(
 	})
 }
 
+// resolveSolanaTransactRelay fetches a relay when the transaction actually needs one and the
+// caller hasn't already pinned one - deferring to henclave's own pick when it builds the proof
+// remotely.
+func resolveSolanaTransactRelay(
+	ctx context.Context,
+	hinkal ihinkal.HinkalInternal,
+	params HinkalSolanaTransactParams,
+) (HinkalSolanaTransactParams, error) {
+	wantsRelay := params.Submit.Mode == SolanaSubmitModeRelayer || params.NeedsRelay
+	if !wantsRelay || params.RelayAddress != "" {
+		return params, nil
+	}
+
+	resolved, err := pretransaction.ResolveRelay(ctx, hinkal, params.ChainID, params.SkipRelayReservation)
+	if err != nil {
+		return HinkalSolanaTransactParams{}, err
+	}
+	params.RelayAddress = resolved.Relay
+	params.AutoSelectRelay = resolved.AutoSelectRelay
+	return params, nil
+}
+
 // SolanaTransact is the single entry point every Solana proof flow funnels through: it resolves
 // the notes, builds the proof and either submits it to the relayer or hands it back.
 func SolanaTransact(
 	ctx context.Context,
 	hinkal ihinkal.HinkalInternal,
-	params HinkalSolanaTransactParams,
+	paramsInput HinkalSolanaTransactParams,
 ) (SolanaTransactResult, error) {
-	if params.UserKeys != nil && params.InputUtxos == nil {
+	if paramsInput.UserKeys != nil && paramsInput.InputUtxos == nil {
 		return SolanaTransactResult{}, errSolanaTransactUserKeysNeedInputs
+	}
+
+	params, err := resolveSolanaTransactRelay(ctx, hinkal, paramsInput)
+	if err != nil {
+		return SolanaTransactResult{}, err
 	}
 
 	userKeys := params.UserKeys

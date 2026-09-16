@@ -50,6 +50,7 @@ func HinkalSolanaWithdraw(
 	recipientAddress string,
 	feeToken string,
 	feeStructureOverride *types.FeeStructure,
+	action types.AdminTransactionType,
 ) (string, error) {
 	chainID, err := pretransaction.ValidateAndGetChainID(erc20Tokens)
 	if err != nil {
@@ -88,10 +89,6 @@ func HinkalSolanaWithdraw(
 	}
 	amountChanges[0] = new(big.Int).Sub(amountChanges[0], feeStructure.FlatFee)
 
-	relay, err := relayerAddress(ctx, hinkal, chainID)
-	if err != nil {
-		return "", err
-	}
 	accounts := api.SolanaTransactAccounts{Recipient: recipientAddress}
 	if !strings.EqualFold(mintAddresses[0], constants.SolanaNativeAddress) {
 		accounts.Mint = mintAddresses[0]
@@ -101,15 +98,13 @@ func HinkalSolanaWithdraw(
 	if err != nil {
 		return "", err
 	}
-	adminData := pretransaction.ConstructAdminData(types.AdminUnshield, chainID, mintAddresses, amountChanges, ethereumAddress, nil)
+	adminData := pretransaction.ConstructAdminData(action, chainID, mintAddresses, amountChanges, ethereumAddress, nil)
 
 	result, err := SolanaTransact(ctx, hinkal, HinkalSolanaTransactParams{
 		ChainID:       chainID,
 		MintAddresses: mintAddresses,
 		AmountChanges: amountChanges,
-		RelayAddress:  relay,
 		Recipient:     recipientAddress,
-		Signer:        relay,
 		FunctionName:  "transact",
 		Accounts:      accounts,
 		RelayerFee:    feeStructure.FlatFee,

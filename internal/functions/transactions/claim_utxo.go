@@ -149,11 +149,6 @@ func HinkalClaimUtxo(
 		return "", err
 	}
 
-	relay, err := relayerAddress(ctx, hinkal, chainID)
-	if err != nil {
-		return "", err
-	}
-
 	recipientInfo, err := hinkal.GetRecipientInfo()
 	if err != nil {
 		return "", err
@@ -165,9 +160,8 @@ func HinkalClaimUtxo(
 		Erc20Addresses:   []string{tokenAddress},
 		AmountChanges:    []*big.Int{amountChange},
 		ExternalActionID: types.ExternalActionZero,
-		ExternalAddress:  relay,
+		ExternalAddress:  "",
 		FeeStructure:     &claimFeeStructure,
-		Relay:            relay,
 		RecipientAddress: recipientInfo,
 		RecipientAmounts: []*big.Int{recipientAmount},
 		InputUtxos:       [][]*utxo.Utxo{{sourceUtxo}},

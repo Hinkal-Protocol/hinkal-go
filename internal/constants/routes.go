@@ -23,6 +23,7 @@ var ServerConfig = struct {
 	ReceiveVaultAccount           string
 	GetTokensInfo                 string
 	GetTokensForChain             string
+	EvmTokenBalances              string
 	GetTokenData                  func(tokenSymbol string) string
 	RouteConfig                   string
 	EvmRpcProxy                   func(chainID int, key string) string
@@ -45,6 +46,7 @@ var ServerConfig = struct {
 	ReceiveVaultAccount:        "/receive-vault/account",
 	GetTokensInfo:              "/get-tokens-info",
 	GetTokensForChain:          "/get-tokens-for-chain",
+	EvmTokenBalances:           "/evm-token-balances",
 	GetTokenData:               func(tokenSymbol string) string { return "/get-token-data/" + tokenSymbol },
 	RouteConfig:                "/rc",
 	EvmRpcProxy:                func(chainID int, key string) string { return fmt.Sprintf("/evm/%d/%s", chainID, key) },
@@ -70,9 +72,9 @@ var RelayerConfig = struct {
 	TransactBatch                            string
 	SolanaTransact                           string
 	SolanaTransactBatch                      string
+	SolanaSponsoredBuild                     string
+	SolanaSponsoredSubmit                    string
 	GetIdleRelay                             string
-	EmitTxPublicData                         string
-	EmitReferralTx                           string
 	GetScheduledTransactions                 string
 	GetScheduledTransactionByID              func(scheduleID string) string
 	GetScheduledTransactionsNullifierIndexes string
@@ -88,9 +90,9 @@ var RelayerConfig = struct {
 	TransactBatch:                            "/general-transact-batch",
 	SolanaTransact:                           "/solana-transact",
 	SolanaTransactBatch:                      "/solana-transact-batch",
+	SolanaSponsoredBuild:                     "/solana-sponsored-build",
+	SolanaSponsoredSubmit:                    "/solana-sponsored-submit",
 	GetIdleRelay:                             "/get-idle-relay",
-	EmitTxPublicData:                         "/emit-tx-public-data",
-	EmitReferralTx:                           "/emit-referral-tx",
 	GetScheduledTransactions:                 "/scheduled-transactions",
 	GetScheduledTransactionByID:              func(scheduleID string) string { return "/scheduled-transactions/" + scheduleID },
 	GetScheduledTransactionsNullifierIndexes: "/scheduled-transactions/nullifier-indexes",
@@ -100,12 +102,18 @@ var DataServerConfig = struct {
 	GetTokenPrices                    string
 	GetTokenPriceChartData            string
 	GetTokenPreviousDayPrices         string
+	EmitTxPublicData                  string
+	EmitReferralTx                    string
+	EmitOnboardingEvent               string
 	GetPrivateTransactionsRatio       func(hashedOwner string) string
 	SavePrivacyScoreAndGetPrivacyRank string
 }{
 	GetTokenPrices:                    "/get-token-prices",
 	GetTokenPriceChartData:            "/get-token-price-chart-data",
 	GetTokenPreviousDayPrices:         "/get-token-previous-day-prices",
+	EmitTxPublicData:                  "/emit-tx-public-data",
+	EmitReferralTx:                    "/emit-referral-tx",
+	EmitOnboardingEvent:               "/emit-onboarding-event",
 	GetPrivateTransactionsRatio:       func(hashedOwner string) string { return "/get-private-transactions-ratio/" + hashedOwner },
 	SavePrivacyScoreAndGetPrivacyRank: "/save-privacy-score-and-get-privacy-rank",
 }

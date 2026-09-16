@@ -1,8 +1,14 @@
 package constants
 
+import "strings"
+
 const (
 	ZeroAddress         = "0x0000000000000000000000000000000000000000"
 	SolanaNativeAddress = "11111111111111111111111111111111"
+
+	// ArcTestnetUSDCAddress is the address Arc testnet's native gas token is represented as, to
+	// avoid it showing up as a second, duplicate entry next to the "real" USDC at zeroAddress.
+	ArcTestnetUSDCAddress = "0x3600000000000000000000000000000000000000"
 
 	// TronDefaultFeeLimitSun is the default fee limit (in SUN) for Tron contract calls.
 	TronDefaultFeeLimitSun int64 = 1_000_000_000
@@ -24,3 +30,17 @@ const (
 	// ReceiveVaultVariableRate is the settle fee rate, in basis points.
 	ReceiveVaultVariableRate int64 = 25
 )
+
+func IsNativePlaceholderAddress(address string, chainID ...int) bool {
+	address = strings.TrimSpace(address)
+	if address == "" {
+		return false
+	}
+	if len(chainID) == 0 {
+		return strings.EqualFold(address, ZeroAddress) || strings.EqualFold(address, SolanaNativeAddress)
+	}
+	if IsSolanaLike(chainID[0]) {
+		return strings.EqualFold(address, SolanaNativeAddress)
+	}
+	return strings.EqualFold(address, ZeroAddress)
+}

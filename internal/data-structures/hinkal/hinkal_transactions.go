@@ -157,13 +157,14 @@ func (h *Hinkal) Withdraw(
 	isRelayerOff bool,
 	feeToken string,
 	feeStructureOverride *types.FeeStructure,
+	action types.AdminTransactionType,
 ) (types.TransactionRequest, string, error) {
 	erc20Tokens, err := resolveERC20Tokens(ctx, chainID, erc20Addresses)
 	if err != nil {
 		return types.TransactionRequest{}, "", err
 	}
 	if constants.IsSolanaLike(chainID) {
-		txHash, err := transactions.HinkalSolanaWithdraw(ctx, h, erc20Tokens, amountChanges, recipientAddress, feeToken, feeStructureOverride)
+		txHash, err := transactions.HinkalSolanaWithdraw(ctx, h, erc20Tokens, amountChanges, recipientAddress, feeToken, feeStructureOverride, action)
 		return types.TransactionRequest{}, txHash, err
 	}
 	return transactions.HinkalWithdraw(
@@ -175,6 +176,7 @@ func (h *Hinkal) Withdraw(
 		isRelayerOff,
 		feeToken,
 		feeStructureOverride,
+		action,
 	)
 }
 
@@ -289,6 +291,8 @@ func (h *Hinkal) BridgePrivateToPrivate(
 	recipient bridging.PrivateBridgeRecipient,
 	slippage float64,
 	feeToken string,
+	feeStructureOverride *types.FeeStructure,
+	action types.AdminTransactionType,
 ) (bridging.PrivateBridgeResult, error) {
 	sourceToken, err := resolveERC20Token(ctx, sourceChainID, sourceTokenAddress)
 	if err != nil {
@@ -298,7 +302,54 @@ func (h *Hinkal) BridgePrivateToPrivate(
 	if err != nil {
 		return bridging.PrivateBridgeResult{}, err
 	}
-	return transactions.HinkalBridgePrivateToPrivate(ctx, h, sourceToken, destToken, amount, recipient, slippage, feeToken)
+	return transactions.HinkalBridgePrivateToPrivate(ctx, h, sourceToken, destToken, amount, recipient, slippage, feeToken, feeStructureOverride, action)
+}
+
+func (h *Hinkal) ProxyToPrivate(
+	ctx context.Context,
+	chainID int,
+	tokenAddress string,
+	amount *big.Int,
+	subAccount types.TemporarySubAccount,
+	recipientInfo string,
+	feeToken string,
+	feeStructureOverride *types.FeeStructure,
+) (string, error) {
+	token, err := resolveERC20Token(ctx, chainID, tokenAddress)
+	if err != nil {
+		return "", err
+	}
+	return transactions.HinkalProxyToPrivate(ctx, h, chainID, token, amount, subAccount, recipientInfo, feeToken, feeStructureOverride, "")
+}
+
+func (h *Hinkal) SolanaSponsoredShield(
+	ctx context.Context,
+	chainID int,
+	tokenAddress string,
+	tempSubAccount types.TemporarySubAccount,
+	landedAmount *big.Int,
+	recipientInfo string,
+) (string, *big.Int, error) {
+	token, err := resolveERC20Token(ctx, chainID, tokenAddress)
+	if err != nil {
+		return "", nil, err
+	}
+	return transactions.HinkalSolanaSponsoredShield(ctx, h, token, tempSubAccount, landedAmount, recipientInfo, "", nil)
+}
+
+func (h *Hinkal) SolanaSponsoredProxySend(
+	ctx context.Context,
+	chainID int,
+	tokenAddress string,
+	tempSubAccount types.TemporarySubAccount,
+	landedAmount *big.Int,
+	recipientAddress string,
+) (string, error) {
+	token, err := resolveERC20Token(ctx, chainID, tokenAddress)
+	if err != nil {
+		return "", err
+	}
+	return transactions.HinkalSolanaSponsoredProxySend(ctx, h, token, tempSubAccount, landedAmount, recipientAddress, "")
 }
 
 func (h *Hinkal) NearDepositAndBridge(

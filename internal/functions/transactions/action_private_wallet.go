@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"strings"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/crypto"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/hinkal/ihinkal"
@@ -66,10 +68,6 @@ func actionPrivateWallet(
 	}
 
 	erc20Addresses := tokenAddresses(erc20Tokens)
-	ethereumAddress, err := hinkal.GetEthereumAddressByChain(ctx, chainID)
-	if err != nil {
-		return "", err
-	}
 
 	var walletAddress string
 	if subAccount != nil {
@@ -84,23 +82,35 @@ func actionPrivateWallet(
 		return "", errors.New("transactions: no emporium address provided")
 	}
 
+	var ethereumAddress string
 	var feeStructure types.FeeStructure
-	if feeStructureOverride != nil {
-		feeStructure = normalizeFeeStructure(*feeStructureOverride)
-	} else {
+	group, groupCtx := errgroup.WithContext(ctx)
+	group.Go(func() (err error) {
+		ethereumAddress, err = hinkal.GetEthereumAddressByChain(groupCtx, chainID)
+		return err
+	})
+	group.Go(func() error {
+		if feeStructureOverride != nil {
+			feeStructure = normalizeFeeStructure(*feeStructureOverride)
+			return nil
+		}
 		calls := make([]types.CallInfo, len(ops))
 		for i, op := range ops {
 			call, err := privatewallet.ConvertEmporiumOpToCallInfo(op, walletAddress, chainID)
 			if err != nil {
-				return "", err
+				return err
 			}
 			calls[i] = call
 		}
-		feeStructure, err = pretransaction.GetFeeStructure(ctx, chainID, feeToken, erc20Addresses, types.ExternalActionEmporium, calls, nil, nil)
+		resolved, err := pretransaction.GetFeeStructure(groupCtx, chainID, feeToken, erc20Addresses, types.ExternalActionEmporium, calls, nil, nil)
 		if err != nil {
-			return "", err
+			return err
 		}
-		feeStructure = normalizeFeeStructure(feeStructure)
+		feeStructure = normalizeFeeStructure(resolved)
+		return nil
+	})
+	if err := group.Wait(); err != nil {
+		return "", err
 	}
 
 	if walletAddress != "" {
@@ -111,7 +121,11 @@ func actionPrivateWallet(
 				break
 			}
 		}
-		if err := mergeWithFeeStructureEmporium(ctx, chainID, walletAddress, &ops, &erc20Addresses, &deltaChanges, feeStructure, feeTokenChange); err != nil {
+		feeTokenInfo, err := resolveFeeTokenInfo(ctx, chainID, feeStructure.FeeToken, erc20Tokens, emporiumTokenChanges)
+		if err != nil {
+			return "", err
+		}
+		if err := mergeWithFeeStructureEmporium(ctx, chainID, walletAddress, &ops, &erc20Addresses, &deltaChanges, feeStructure, feeTokenInfo, feeTokenChange); err != nil {
 			return "", err
 		}
 	} else if err := pretransaction.MergeWithFeeStructure(ctx, chainID, &erc20Addresses, &deltaChanges, feeStructure); err != nil {
@@ -123,14 +137,6 @@ func actionPrivateWallet(
 	}
 
 	useEnclave := hinkal.GenerateProofRemotely() && constants.IsEnclaveTxChain(chainID)
-
-	relay := relayOverride
-	if relay == "" {
-		relay, err = relayerAddress(ctx, hinkal, chainID)
-		if err != nil {
-			return "", err
-		}
-	}
 
 	var subAccountPrivateKey string
 	if subAccount != nil {
@@ -182,7 +188,7 @@ func actionPrivateWallet(
 				return "", err
 			}
 		}
-		encoded, err := privatewallet.EncodeEmporiumMetadata(chainID, contractData.EmporiumAddress, subAccountPrivateKey, ops, emporiumMessage, subAccountSignerAddress)
+		encoded, err := privatewallet.EncodeEmporiumMetadata(chainID, contractData.EmporiumAddress, subAccountPrivateKey, ops, emporiumMessage, subAccountSignerAddress, feeStructure.FlatFee)
 		if err != nil {
 			return "", err
 		}
@@ -197,7 +203,7 @@ func actionPrivateWallet(
 		ExternalAddress:        contractData.EmporiumAddress,
 		ExternalActionMetadata: externalActionMetadata,
 		FeeStructure:           &feeStructure,
-		Relay:                  relay,
+		Relay:                  relayOverride,
 		OnChainCreation:        onChainCreation,
 		MessageSeed:            messageSeed,
 		RecipientAddress:       privateRecipientInfoAddress(privateRecipientInfo),

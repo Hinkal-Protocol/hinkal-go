@@ -131,10 +131,6 @@ func withdrawSingleStuckToken(
 	if err != nil {
 		return "", nil, err
 	}
-	relay, err := relayerAddress(ctx, hinkal, chainID)
-	if err != nil {
-		return "", nil, err
-	}
 
 	recipientAddress, err := utils.AddressToHexFormat(recipientAddressRaw)
 	if err != nil {
@@ -157,7 +153,6 @@ func withdrawSingleStuckToken(
 		ExternalActionID: types.ExternalActionZero,
 		ExternalAddress:  recipientAddress,
 		FeeStructure:     &feeStructure,
-		Relay:            relay,
 		UseBlockedUtxos:  true,
 		OnTxConfirm: func(circomData types.CircomDataType) error {
 			markNullifiersSpent(hinkal, chainID, circomData.InputNullifiers)
@@ -189,10 +184,6 @@ func withdrawSingleStuckTokenSolana(
 	if err != nil {
 		return "", nil, err
 	}
-	relay, err := relayerAddress(ctx, hinkal, chainID)
-	if err != nil {
-		return "", nil, err
-	}
 
 	amountToRecipient := new(big.Int).Sub(totalAmountInUtxos, feeStructure.FlatFee)
 	if amountToRecipient.Sign() <= 0 {
@@ -211,9 +202,7 @@ func withdrawSingleStuckTokenSolana(
 		ChainID:         chainID,
 		MintAddresses:   mintAddresses,
 		AmountChanges:   amountChanges,
-		RelayAddress:    relay,
 		Recipient:       recipientAddress,
-		Signer:          relay,
 		FunctionName:    "transact",
 		Accounts:        accounts,
 		RelayerFee:      feeStructure.FlatFee,
@@ -266,7 +255,7 @@ func stuckWithdrawViaEnclave(
 	if err != nil {
 		return nil, err
 	}
-	relay, err := relayerAddress(ctx, hinkal, chainID)
+	resolved, err := pretransaction.ResolveRelay(ctx, hinkal, chainID, false)
 	if err != nil {
 		return nil, err
 	}
@@ -279,7 +268,8 @@ func stuckWithdrawViaEnclave(
 		ChainID:               chainID,
 		Erc20Address:          erc20Address,
 		ExternalAddress:       externalAddress,
-		Relay:                 relay,
+		Relay:                 resolved.Relay,
+		AutoSelectRelay:       resolved.AutoSelectRelay,
 		FeeStructure:          feeStructure,
 		HashedEthereumAddress: utils.HashEthereumAddress(ethAddress),
 	})
@@ -364,7 +354,7 @@ func stuckWithdrawSolanaViaEnclave(
 	if err != nil {
 		return nil, err
 	}
-	relay, err := relayerAddress(ctx, hinkal, chainID)
+	resolved, err := pretransaction.ResolveRelay(ctx, hinkal, chainID, false)
 	if err != nil {
 		return nil, err
 	}
@@ -386,7 +376,8 @@ func stuckWithdrawSolanaViaEnclave(
 		ChainID:               chainID,
 		MintAddress:           mintAddress,
 		Recipient:             recipientAddress,
-		RelayAddress:          relay,
+		RelayAddress:          resolved.Relay,
+		AutoSelectRelay:       resolved.AutoSelectRelay,
 		Accounts:              accountsJSON,
 		FeeStructures:         feeStructures,
 		HashedEthereumAddress: utils.HashEthereumAddress(ethAddress),

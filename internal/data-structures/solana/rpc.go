@@ -7,7 +7,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"net/http"
+
+	bin "github.com/gagliardetto/binary"
+	"github.com/gagliardetto/solana-go/programs/token"
 )
 
 type Client struct {
@@ -135,4 +139,35 @@ func (c *Client) GetTransaction(ctx context.Context, signature string) (*Transac
 	var tx *Transaction
 	err := c.call(ctx, "getTransaction", []any{signature, opts}, &tx)
 	return tx, err
+}
+
+func (c *Client) GetBalance(ctx context.Context, address string) (*big.Int, error) {
+	var result struct {
+		Value uint64 `json:"value"`
+	}
+	params := []any{address, map[string]any{"commitment": "confirmed"}}
+	if err := c.call(ctx, "getBalance", params, &result); err != nil {
+		return nil, err
+	}
+	return new(big.Int).SetUint64(result.Value), nil
+}
+
+// GetTokenBalanceByAta reads the balance out of a single token account, and reports a missing
+// account as a zero balance. The caller derives the associated token account (ATA) for the owner
+// and mint, so which token program (SPL or Token-2022) owns it is settled before we get here; both
+// share the same base account layout, so one decoder reads the balance out of either.
+func (c *Client) GetTokenBalanceByAta(ctx context.Context, ata string) (*big.Int, error) {
+	raw, err := c.GetAccountInfo(ctx, ata)
+	if errors.Is(err, ErrAccountNotFound) {
+		return big.NewInt(0), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	var account token.Account
+	if err := bin.NewBinDecoder(raw).Decode(&account); err != nil {
+		return nil, fmt.Errorf("getTokenBalanceByAta: %w", err)
+	}
+	return new(big.Int).SetUint64(account.Amount), nil
 }
