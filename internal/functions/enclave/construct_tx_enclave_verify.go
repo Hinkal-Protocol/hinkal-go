@@ -993,6 +993,27 @@ func verifyPrepareTxResponse(chainID int, payload types.PrepareTxRequestType, re
 	return verifyAssertSignedMessageHashMatches(chainID, payload.HinkalAddress, response, inNullifiers, outCommitments, calldataHash, message, amountChangesModWrapped)
 }
 
+func verifyStuckWithdrawJobCoversFee(inputTotal, flatFee *big.Int) error {
+	if inputTotal.Cmp(flatFee) <= 0 {
+		return errors.New("enclave: stuck withdraw job does not cover its relayer fee - refusing to sign")
+	}
+	return nil
+}
+
+// spentNullifiers is shared across the jobs of one response so a note can't appear in two of them.
+func verifyNoRepeatedStuckNotes(inNullifiers [][]string, spentNullifiers map[string]struct{}) error {
+	for _, nullifier := range inNullifiers[0] {
+		if nullifier == "0" {
+			continue
+		}
+		if _, seen := spentNullifiers[nullifier]; seen {
+			return errors.New("enclave: stuck withdraw jobs spend the same note twice - refusing to sign")
+		}
+		spentNullifiers[nullifier] = struct{}{}
+	}
+	return nil
+}
+
 // amountChanges comes from the job's own reported input total, not the request - the request
 // carries no amounts, since only the enclave knows which stuck notes exist.
 func verifyStuckWithdrawJobSignedMessageHash(
@@ -1002,9 +1023,13 @@ func verifyStuckWithdrawJobSignedMessageHash(
 	nullifyingKey string,
 	spendingPublicKey [2]string,
 	job types.PreparedStuckWithdrawJobType,
+	spentNullifiers map[string]struct{},
 ) error {
 	inNullifiers, err := verifyComputeInNullifiers([]string{erc20TokenAddress}, job.InAmounts, job.InH0Ax, job.InH0Ay, job.InTimeStamps, nullifyingKey, spendingPublicKey, nil)
 	if err != nil {
+		return err
+	}
+	if err := verifyNoRepeatedStuckNotes(inNullifiers, spentNullifiers); err != nil {
 		return err
 	}
 	outCommitments, err := verifyComputeOutCommitments([]string{erc20TokenAddress}, nil, job.OutAmounts, job.OutNoteH0Ax, job.OutNoteH0Ay, job.OutTimeStamp, nullifyingKey, spendingPublicKey, nil, nil)
@@ -1019,6 +1044,9 @@ func verifyStuckWithdrawJobSignedMessageHash(
 			return err
 		}
 		inputTotal.Add(inputTotal, v)
+	}
+	if err := verifyStuckWithdrawJobCoversFee(inputTotal, feeStructure.FlatFee); err != nil {
+		return err
 	}
 	amountChangesSigned := new(big.Int).Neg(inputTotal)
 	if err := verifyAssertAmountsConserve([]string{erc20TokenAddress}, job.InAmounts, job.OutAmounts, nil, []string{amountChangesSigned.String()}); err != nil {
@@ -1381,6 +1409,7 @@ func verifySolanaStuckWithdrawJobSignedMessageHash(
 	nullifyingKey string,
 	spendingPublicKey [2]string,
 	job types.PreparedStuckWithdrawJobType,
+	spentNullifiers map[string]struct{},
 ) error {
 	formatted, err := solanautils.FormatMintAddress(mintAddress)
 	if err != nil {
@@ -1390,6 +1419,9 @@ func verifySolanaStuckWithdrawJobSignedMessageHash(
 
 	inNullifiers, err := verifyComputeInNullifiers([]string{compressedAddress}, job.InAmounts, job.InH0Ax, job.InH0Ay, job.InTimeStamps, nullifyingKey, spendingPublicKey, nil)
 	if err != nil {
+		return err
+	}
+	if err := verifyNoRepeatedStuckNotes(inNullifiers, spentNullifiers); err != nil {
 		return err
 	}
 	outCommitments, err := verifyComputeOutCommitments([]string{compressedAddress}, nil, job.OutAmounts, job.OutNoteH0Ax, job.OutNoteH0Ay, job.OutTimeStamp, nullifyingKey, spendingPublicKey, nil, nil)
@@ -1404,6 +1436,9 @@ func verifySolanaStuckWithdrawJobSignedMessageHash(
 			return err
 		}
 		inputTotal.Add(inputTotal, v)
+	}
+	if err := verifyStuckWithdrawJobCoversFee(inputTotal, feeStructure.FlatFee); err != nil {
+		return err
 	}
 	amountChangesSigned := new(big.Int).Neg(inputTotal)
 	if err := verifyAssertAmountsConserve([]string{compressedAddress}, job.InAmounts, job.OutAmounts, nil, []string{amountChangesSigned.String()}); err != nil {

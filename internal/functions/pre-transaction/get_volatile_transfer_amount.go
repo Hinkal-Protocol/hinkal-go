@@ -61,10 +61,22 @@ func ModifyVolatileTokenAmountChanges(
 		if newAmount == "" {
 			continue
 		}
-		if parsed, parseErr := utils.ParseBigInt(newAmount); parseErr == nil {
-			newAmountChanges[index] = parsed
+		parsed, parseErr := utils.ParseBigInt(newAmount)
+		if parseErr != nil {
+			continue
 		}
+		if !isWithinOriginalSpend(amount, parsed) {
+			log.Printf("Volatile transfer simulation returned an out of bound amount: token=%s amount=%s simulatedAmount=%s",
+				volatileTokenSpends[indexOfResult].TokenAddress, amount.String(), parsed.String())
+			continue
+		}
+		newAmountChanges[index] = parsed
 	}
 
 	return newAmountChanges
+}
+
+func isWithinOriginalSpend(original, simulated *big.Int) bool {
+	return (original.Sign() < 0) == (simulated.Sign() < 0) &&
+		new(big.Int).Abs(simulated).Cmp(new(big.Int).Abs(original)) <= 0
 }

@@ -53,6 +53,13 @@ func AddressToHexFormat(addr string) (string, error) {
 	return "", errors.New("failed to convert address to hex format")
 }
 
+func TronAddressBytes(addr string) ([]byte, error) {
+	if strings.HasPrefix(addr, "T") {
+		return decodeTronBase58Check(addr)
+	}
+	return tronPayloadFromHex(addr)
+}
+
 func NormalizeTronAddr(addr string) (string, error) {
 	if strings.HasPrefix(addr, "T") {
 		return AddressToHexFormat(addr)

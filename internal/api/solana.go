@@ -86,15 +86,15 @@ type SolanaTransactionBatchRequestBody struct {
 
 func CallRelayerSolanaTransactAPI(ctx context.Context, body SolanaTransactionBody) (RelayerResponse, error) {
 	var resp RelayerResponse
-	if err := Post(ctx, constants.GetRelayerURL()+constants.RelayerConfig.SolanaTransact, body, &resp); err != nil {
+	if err := Post(ctx, constants.GetEnclaveURL()+constants.RelayerConfig.SolanaTransact, body, &resp); err != nil {
 		return RelayerResponse{}, err
 	}
 	return resp, nil
 }
 
-func CallRelayerSolanaTransactBatchAPI(ctx context.Context, body SolanaTransactionBatchRequestBody) (RelayerBatchResponse, error) {
+func CallScheduleSolanaTransactionsAPI(ctx context.Context, body SolanaTransactionBatchRequestBody) (RelayerBatchResponse, error) {
 	var resp RelayerBatchResponse
-	if err := Post(ctx, constants.GetRelayerURL()+constants.RelayerConfig.SolanaTransactBatch, body, &resp); err != nil {
+	if err := Post(ctx, constants.GetEnclaveURL()+constants.RelayerConfig.ScheduleTransactions, body, &resp); err != nil {
 		return RelayerBatchResponse{}, err
 	}
 	return resp, nil
@@ -134,7 +134,7 @@ type SolanaSponsoredSubmitResponse struct {
 
 func CallRelayerSolanaSponsoredBuildAPI(ctx context.Context, body SolanaSponsoredBuildRequestBody) (SolanaSponsoredBuildResponse, error) {
 	var resp SolanaSponsoredBuildResponse
-	if err := Post(ctx, constants.GetRelayerURL()+constants.RelayerConfig.SolanaSponsoredBuild, body, &resp); err != nil {
+	if err := Post(ctx, constants.GetEnclaveURL()+constants.RelayerConfig.SolanaSponsoredBuild, body, &resp); err != nil {
 		return SolanaSponsoredBuildResponse{}, err
 	}
 	return resp, nil
@@ -142,7 +142,7 @@ func CallRelayerSolanaSponsoredBuildAPI(ctx context.Context, body SolanaSponsore
 
 func CallRelayerSolanaSponsoredSubmitAPI(ctx context.Context, body SolanaSponsoredSubmitRequestBody) (SolanaSponsoredSubmitResponse, error) {
 	var resp SolanaSponsoredSubmitResponse
-	if err := Post(ctx, constants.GetRelayerURL()+constants.RelayerConfig.SolanaSponsoredSubmit, body, &resp); err != nil {
+	if err := Post(ctx, constants.GetEnclaveURL()+constants.RelayerConfig.SolanaSponsoredSubmit, body, &resp); err != nil {
 		return SolanaSponsoredSubmitResponse{}, err
 	}
 	return resp, nil

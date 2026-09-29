@@ -49,16 +49,12 @@ func loadAccount(
 
 	verified := make([]types.ReceiveVaultRecord, 0, len(account.Records))
 	for _, record := range account.Records {
-		rebuilt, err := BuildReceiveVaultRecord(ctx, userKeys, TermsFromReceiveVaultRecord(record))
-		if err != nil {
-			continue
-		}
 		canonicalChainID, err := getReceiveVaultCanonicalChainID(record.Network)
 		if err != nil {
 			continue
 		}
-		matches := addresses.Equal(canonicalChainID, rebuilt.VaultAddress, record.VaultAddress)
-		if !matches {
+		// Checking that address is correct
+		if _, _, err := ResolveReceiveVaultParams(ctx, userKeys, record, canonicalChainID); err != nil {
 			continue
 		}
 		verified = append(verified, record)
@@ -153,15 +149,10 @@ func registerRecord(ctx context.Context, claim receiveVaultClaim, record types.R
 	if err != nil {
 		return false, err
 	}
-	shieldedPrivateKey, err := claim.userKeys.GetShieldedPrivateKey()
-	if err != nil {
-		return false, err
-	}
-
 	chains := ReceiveVaultChainsForNetwork(record.Network)
 	outputSignatures := make([]types.ReceiveVaultOutputSignature, 0, len(chains))
 	for _, chainID := range chains {
-		signature, err := SignReceiveVaultOutput(shieldedPrivateKey, record, encryptedOutput, chainID)
+		signature, err := SignReceiveVaultOutput(ctx, claim.userKeys, record, encryptedOutput, chainID)
 		if err != nil {
 			return false, err
 		}

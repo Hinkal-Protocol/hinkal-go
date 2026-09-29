@@ -12,6 +12,7 @@ import (
 	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/hinkal/ihinkal"
 	errorhandling "github.com/Hinkal-Protocol/hinkal-go/internal/error-handling"
+	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/fees"
 	pretransaction "github.com/Hinkal-Protocol/hinkal-go/internal/functions/pre-transaction"
 	solanautils "github.com/Hinkal-Protocol/hinkal-go/internal/functions/solana"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/web3"
@@ -30,10 +31,7 @@ func solanaSwapSlippagePercent(hinkal ihinkal.HinkalInternal) float64 {
 	return value
 }
 
-var (
-	errSolanaSwapTwoTokens        = errors.New("transactions: Solana swap requires exactly two tokens")
-	errSolanaSwapFeeTokenMismatch = errors.New("solana swap fee token must match the output token")
-)
+var errSolanaSwapTwoTokens = errors.New("transactions: Solana swap requires exactly two tokens")
 
 func HinkalSolanaSwap(
 	ctx context.Context,
@@ -43,7 +41,6 @@ func HinkalSolanaSwap(
 	swapperAccountSalt *big.Int,
 	instructionLists []api.OKXSwapResponseInstruction,
 	addressLookupTableAccount []string,
-	feeToken string,
 	feeStructureOverride *types.FeeStructure,
 ) (string, error) {
 	chainID, err := pretransaction.ValidateAndGetChainID(erc20Tokens)
@@ -77,26 +74,23 @@ func HinkalSolanaSwap(
 
 	amountChanges := copyBigInts(amountChangesBase)
 	mintAddresses := tokenAddresses(erc20Tokens)
-	if feeToken != "" && feeToken != mintAddresses[1] {
-		return "", errSolanaSwapFeeTokenMismatch
-	}
-	if feeToken == "" {
-		feeToken = mintAddresses[1]
-	}
 
 	var feeStructure types.FeeStructure
 	if feeStructureOverride != nil {
 		feeStructure = *feeStructureOverride
 	} else {
 		solanaParams := &api.SolanaGasEstimateParams{
-			MintTo:         feeToken,
+			MintTo:         mintAddresses[1],
 			MintFrom:       mintAddresses[0],
 			NullifierCount: pretransaction.CalculateSolanaNullifierCount(ctx, hinkal, chainID, mintAddresses, amountChanges),
 		}
-		feeStructure, err = pretransaction.GetFeeStructure(ctx, chainID, feeToken, mintAddresses, types.ExternalActionOkx, nil, nil, solanaParams)
+		feeStructure, err = pretransaction.GetFeeStructure(ctx, chainID, mintAddresses[1], mintAddresses, types.ExternalActionOkx, nil, nil, solanaParams)
 		if err != nil {
 			return "", err
 		}
+	}
+	if err := fees.AssertSolanaFeeTokenMatchesMint(feeStructure, mintAddresses[1]); err != nil {
+		return "", err
 	}
 	feeStructure = normalizeFeeStructure(feeStructure)
 

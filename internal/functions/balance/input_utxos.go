@@ -13,7 +13,6 @@ import (
 	"github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/hinkal/ihinkal"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/utxo"
 	errorhandling "github.com/Hinkal-Protocol/hinkal-go/internal/error-handling"
-	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/enclave"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/types"
 )
 
@@ -48,7 +47,6 @@ type InputUtxoParams struct {
 	PassedShieldedPublicKey string
 	EthAddress              string
 	ResetCacheBefore        bool
-	AllowRemoteDecryption   bool
 	UseBlockedUtxos         bool
 }
 
@@ -107,56 +105,6 @@ func getInputUtxosLocally(
 	return DecodeOutputs(newEncryptedOutputs, userKeys, currentChainID)
 }
 
-func getInputUtxosRemotely(
-	ctx context.Context,
-	hinkal ihinkal.HinkalInternal,
-	userKeys *cryptokeys.UserKeys,
-	currentChainID int,
-	shieldedPublicKey string,
-) ([]*utxo.Utxo, string, error) {
-	resolvedUtxos, newEncryptedOutputs, lastOutput, err := enclave.GetInputUtxosEnclave(ctx, currentChainID, userKeys)
-	if err != nil {
-		return nil, "", err
-	}
-
-	if err := cache.SetHinkalCache(
-		cache.HinkalCacheInterface{EncryptedOutputs: newEncryptedOutputs, LastOutput: lastOutput},
-		hinkal,
-		currentChainID,
-		shieldedPublicKey,
-	); err != nil {
-		return nil, "", err
-	}
-
-	return resolvedUtxos, lastOutput, nil
-}
-
-func attemptGetInputUtxosRemotely(
-	ctx context.Context,
-	hinkal ihinkal.HinkalInternal,
-	userKeys *cryptokeys.UserKeys,
-	currentChainID int,
-	ethereumAddress string,
-	shieldedPublicKey string,
-	hinkalOutputs []*types.EncryptedOutputWithSign,
-	cachedEncryptedOutputs []*types.EncryptedOutputWithSign,
-	lastOutput string,
-	lastOutputIndex int,
-) ([]*utxo.Utxo, error) {
-	resolvedUtxos, remoteLastOutput, err := getInputUtxosRemotely(ctx, hinkal, userKeys, currentChainID, shieldedPublicKey)
-	if err == nil {
-		latestLocalOutput := ""
-		if len(hinkalOutputs) > 0 {
-			latestLocalOutput = hinkalOutputs[len(hinkalOutputs)-1].Value
-		}
-		if latestLocalOutput == "" || remoteLastOutput == latestLocalOutput {
-			return resolvedUtxos, nil
-		}
-	}
-
-	return getInputUtxosLocally(ctx, hinkal, userKeys, currentChainID, ethereumAddress, shieldedPublicKey, hinkalOutputs, cachedEncryptedOutputs, lastOutput, lastOutputIndex)
-}
-
 func GetInputUtxoAndBalance(ctx context.Context, p InputUtxoParams) ([]*utxo.Utxo, error) {
 	hinkal := p.Hinkal
 	chainID := p.ChainID
@@ -209,22 +157,12 @@ func GetInputUtxoAndBalance(ctx context.Context, p InputUtxoParams) ([]*utxo.Utx
 
 	forceReadFromCache := hinkal.AreMerkleTreeUpdatesDisabled()
 
-	// A hard refresh must be based on the just-fetched chain snapshot. The enclave can
-	// return a successful but stale owned-output set, so skip it after cache reset.
-	allowRemoteDecryption := p.AllowRemoteDecryption && !p.ResetCacheBefore
-
-	decryptLocally := !forceReadFromCache && (case1 || (!allowRemoteDecryption && case2))
-	decryptRemotely := !forceReadFromCache && allowRemoteDecryption && case2
-	useCache := !decryptLocally && !decryptRemotely
+	decryptLocally := !forceReadFromCache && (case1 || case2)
 
 	var allUtxos []*utxo.Utxo
-
-	switch {
-	case decryptLocally:
+	if decryptLocally {
 		allUtxos, err = getInputUtxosLocally(ctx, hinkal, userKeys, chainID, ethereumAddress, shieldedPublicKey, hinkalOutputs, cachedEncryptedOutputs, lastOutput, lastOutputIndex)
-	case decryptRemotely:
-		allUtxos, err = attemptGetInputUtxosRemotely(ctx, hinkal, userKeys, chainID, ethereumAddress, shieldedPublicKey, hinkalOutputs, cachedEncryptedOutputs, lastOutput, lastOutputIndex)
-	case useCache:
+	} else {
 		allUtxos, err = DecodeOutputs(cachedEncryptedOutputs, userKeys, chainID)
 	}
 	if err != nil {

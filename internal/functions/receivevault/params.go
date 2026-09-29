@@ -8,6 +8,7 @@ import (
 	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
 	cryptokeys "github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/crypto-keys"
 	utxoimpl "github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/utxo"
+	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/addresses"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/utils"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/types"
 )
@@ -17,6 +18,83 @@ var errNoH0 = errors.New("receive vault: H0 is not set")
 // GetReceiveVaultParams derives the vault's params from the terms it was quoted with. Same terms,
 // same params, same address: the derivation is the only record the protocol keeps.
 func GetReceiveVaultParams(userKeys *cryptokeys.UserKeys, terms types.ReceiveVaultTerms) (types.ReceiveVaultParams, error) {
+	auxSpendKey, err := userKeys.GetAuxSpendKey()
+	if err != nil {
+		return types.ReceiveVaultParams{}, err
+	}
+	var owner string
+	if terms.Network == types.ReceiveVaultNetworkSolana {
+		owner = GetReceiveVaultSolanaOwnerAddress(auxSpendKey, terms)
+	} else {
+		owner, err = GetReceiveVaultRecoveryAddress(auxSpendKey, terms)
+		if err != nil {
+			return types.ReceiveVaultParams{}, err
+		}
+	}
+	return getReceiveVaultParamsWithOwner(userKeys, terms, owner)
+}
+
+// GetLegacyReceiveVaultParams is the same derivation with an nk-derived owner; kept so
+// ResolveReceiveVaultParams can recognize vaults created under the old scheme.
+//
+// Deprecated: use GetReceiveVaultParams.
+func GetLegacyReceiveVaultParams(userKeys *cryptokeys.UserKeys, terms types.ReceiveVaultTerms) (types.ReceiveVaultParams, error) {
+	nullifyingKey, err := userKeys.GetShieldedPrivateKey()
+	if err != nil {
+		return types.ReceiveVaultParams{}, err
+	}
+	var owner string
+	if terms.Network == types.ReceiveVaultNetworkSolana {
+		owner = GetReceiveVaultSolanaOwnerAddress(nullifyingKey, terms)
+	} else {
+		owner, err = GetReceiveVaultRecoveryAddress(nullifyingKey, terms)
+		if err != nil {
+			return types.ReceiveVaultParams{}, err
+		}
+	}
+	return getReceiveVaultParamsWithOwner(userKeys, terms, owner)
+}
+
+// ResolveReceiveVaultParams tells which scheme built a record. The CREATE2 salt embeds `owner`, so
+// the vault address itself identifies it: try current, fall back to legacy, match the known address.
+func ResolveReceiveVaultParams(
+	ctx context.Context,
+	userKeys *cryptokeys.UserKeys,
+	record types.ReceiveVaultRecord,
+	chainID int,
+) (params types.ReceiveVaultParams, isLegacy bool, err error) {
+	terms := TermsFromReceiveVaultRecord(record)
+
+	current, err := GetReceiveVaultParams(userKeys, terms)
+	if err != nil {
+		return types.ReceiveVaultParams{}, false, err
+	}
+	currentAddress, err := GetReceiveVaultAddress(ctx, current, chainID)
+	if err != nil {
+		return types.ReceiveVaultParams{}, false, err
+	}
+	if addresses.Equal(chainID, currentAddress, record.VaultAddress) {
+		return current, false, nil
+	}
+
+	legacy, err := GetLegacyReceiveVaultParams(userKeys, terms)
+	if err != nil {
+		return types.ReceiveVaultParams{}, false, err
+	}
+	legacyAddress, err := GetReceiveVaultAddress(ctx, legacy, chainID)
+	if err != nil {
+		return types.ReceiveVaultParams{}, false, err
+	}
+	if addresses.Equal(chainID, legacyAddress, record.VaultAddress) {
+		return legacy, true, nil
+	}
+
+	return types.ReceiveVaultParams{}, false, errors.New("receive vault: record does not match either key-derivation scheme")
+}
+
+// H0/H1/stealthAddress are nk-derived and identical either way - only `owner` differs between the
+// current and legacy schemes, so both share this and just swap the owner in.
+func getReceiveVaultParamsWithOwner(userKeys *cryptokeys.UserKeys, terms types.ReceiveVaultTerms, owner string) (types.ReceiveVaultParams, error) {
 	nullifyingKey, err := userKeys.GetShieldedPrivateKey()
 	if err != nil {
 		return types.ReceiveVaultParams{}, err
@@ -60,15 +138,6 @@ func GetReceiveVaultParams(userKeys *cryptokeys.UserKeys, terms types.ReceiveVau
 		return types.ReceiveVaultParams{}, err
 	}
 
-	var owner string
-	if terms.Network == types.ReceiveVaultNetworkSolana {
-		owner = GetReceiveVaultSolanaOwnerAddress(nullifyingKey, terms)
-	} else {
-		owner, err = GetReceiveVaultRecoveryAddress(nullifyingKey, terms)
-		if err != nil {
-			return types.ReceiveVaultParams{}, err
-		}
-	}
 	version, err := parseVersion(terms.Version)
 	if err != nil {
 		return types.ReceiveVaultParams{}, err

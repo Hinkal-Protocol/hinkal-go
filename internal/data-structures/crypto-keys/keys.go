@@ -24,6 +24,7 @@ import (
 const (
 	prefixForSpendingPair   = "1"
 	prefixForNullifyingPair = "2"
+	prefixForAuxSpendKey    = "2"
 
 	shieldedKeyScope        = "hinkal-offchain-shielded-key"
 	claimableSignatureScope = "hinkal-claimable-utxo-signature"
@@ -178,7 +179,14 @@ func (u *UserKeys) GetShieldedPrivateKeyFromNonce(nonce *big.Int) (string, error
 }
 
 func (u *UserKeys) GetClaimableSignatureFromNonce(nonce *big.Int) (string, error) {
-	return u.derivedKeyFromNonce(nonce, claimableSignatureScope)
+	if err := u.requireSignature(); err != nil {
+		return "", err
+	}
+	seed, err := u.auxPoseidonSeed(nonce)
+	if err != nil {
+		return "", err
+	}
+	return keccak256Utf8(claimableSignatureScope + ":" + seed), nil
 }
 
 func (u *UserKeys) derivedKeyFromNonce(nonce *big.Int, scope string) (string, error) {
@@ -192,9 +200,52 @@ func (u *UserKeys) derivedKeyFromNonce(nonce *big.Int, scope string) (string, er
 	return keccak256Utf8(scope + ":" + seed), nil
 }
 
+// GetAuxSpendKey is the third key alongside nk (view-only) and the EdDSA spending key (circuit
+// signing). Signature-only, so unlike nk it can't be handed to the enclave. Seeds anything
+// spend-capable outside the circuit: claimable notes, bridge/NEAR temp-wallet keys, receive-vault
+// recovery signers. Returned as a 0x-prefixed hexstring.
+func (u *UserKeys) GetAuxSpendKey() (string, error) {
+	if err := u.requireSignature(); err != nil {
+		return "", err
+	}
+	return poseidonHashHex(prefixForAuxSpendKey, u.signature)
+}
+
+func (u *UserKeys) auxSpendPublicKey() (string, error) {
+	auxKey, err := u.GetAuxSpendKey()
+	if err != nil {
+		return "", err
+	}
+	return poseidonHashHex(auxKey)
+}
+
+func (u *UserKeys) auxSpendKeySeed() (string, error) {
+	auxKey, err := u.GetAuxSpendKey()
+	if err != nil {
+		return "", err
+	}
+	hash := gethcrypto.Keccak256(common.FromHex(auxKey))
+	return "0x" + hex.EncodeToString(hash), nil
+}
+
 // GetSignerPrivateKeyFromNonce generates an access token; this accessKey is what should be sent to
 // the server for signing. Returns the accessKey as a 0x-prefixed hexstring.
 func (u *UserKeys) GetSignerPrivateKeyFromNonce(walletNonce *big.Int) (string, error) {
+	if err := u.requireSignature(); err != nil {
+		return "", err
+	}
+	seed, err := u.auxPoseidonSeed(walletNonce)
+	if err != nil {
+		return "", err
+	}
+	return keccak256Utf8(seed), nil
+}
+
+// GetLegacySignerPrivateKeyFromNonce is nk-based; kept only to locate/sweep bridge temp wallets
+// issued under the old scheme.
+//
+// Deprecated: use GetSignerPrivateKeyFromNonce.
+func (u *UserKeys) GetLegacySignerPrivateKeyFromNonce(walletNonce *big.Int) (string, error) {
 	if err := u.requireKeyMaterial(); err != nil {
 		return "", err
 	}
@@ -226,6 +277,22 @@ func (u *UserKeys) poseidonSeed(nonce *big.Int) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	return poseidonNonceSeed(nonce, priv, pub)
+}
+
+func (u *UserKeys) auxPoseidonSeed(nonce *big.Int) (string, error) {
+	priv, err := u.GetAuxSpendKey()
+	if err != nil {
+		return "", err
+	}
+	pub, err := u.auxSpendPublicKey()
+	if err != nil {
+		return "", err
+	}
+	return poseidonNonceSeed(nonce, priv, pub)
+}
+
+func poseidonNonceSeed(nonce *big.Int, priv, pub string) (string, error) {
 	privBig, err := utils.ParseBigInt(priv)
 	if err != nil {
 		return "", err
@@ -264,10 +331,35 @@ func (u *UserKeys) GetDerivedSolanaPublicKey() (string, error) {
 }
 
 // GetNearIntentsAccountID deterministically derives the user's NEAR Intents account id from the
-// shielded private key. The account id is the NEAR implicit account (lowercase hex of the ed25519
-// public key) of the same keypair returned by GetDerivedSolanaPublicKey. Used as a private
-// cross-chain refund destination so refunds never expose the user's public main wallet.
+// aux spend key. The account id is the NEAR implicit account (lowercase hex of the ed25519 public
+// key) of a keypair distinct from the one GetDerivedSolanaPublicKey returns: this one is aux-key
+// derived, not nk-derived, so nk alone can't reproduce it. Used as a private cross-chain refund
+// destination so refunds never expose the user's public main wallet.
 func (u *UserKeys) GetNearIntentsAccountID() (string, error) {
+	keypair, err := u.auxSolanaKeypair()
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(keypair[ed25519.SeedSize:]), nil
+}
+
+// GetNearIntentsKeyPairString deterministically derives the NEAR Intents signing key from the aux
+// spend key, formatted as a near-api-js KeyPair string ("ed25519:<base58 secret>"). Pairs with
+// GetNearIntentsAccountID and is used client-side to authorize claiming cross-chain bridge refunds
+// back out of the user's Intents account.
+func (u *UserKeys) GetNearIntentsKeyPairString() (string, error) {
+	keypair, err := u.auxSolanaKeypair()
+	if err != nil {
+		return "", err
+	}
+	return "ed25519:" + base58.Encode(keypair), nil
+}
+
+// GetLegacyNearIntentsAccountID is nk-based; kept only to locate/refund a NEAR Intents account
+// opened under the old scheme.
+//
+// Deprecated: use GetNearIntentsAccountID.
+func (u *UserKeys) GetLegacyNearIntentsAccountID() (string, error) {
 	keypair, err := u.derivedSolanaKeypair()
 	if err != nil {
 		return "", err
@@ -275,16 +367,27 @@ func (u *UserKeys) GetNearIntentsAccountID() (string, error) {
 	return hex.EncodeToString(keypair[ed25519.SeedSize:]), nil
 }
 
-// GetNearIntentsKeyPairString deterministically derives the NEAR Intents signing key from the
-// shielded private key, formatted as a near-api-js KeyPair string ("ed25519:<base58 secret>").
-// Pairs with GetNearIntentsAccountID and is used client-side to authorize claiming cross-chain
-// bridge refunds back out of the user's Intents account.
-func (u *UserKeys) GetNearIntentsKeyPairString() (string, error) {
+// GetLegacyNearIntentsKeyPairString see GetLegacyNearIntentsAccountID.
+//
+// Deprecated: use GetNearIntentsKeyPairString.
+func (u *UserKeys) GetLegacyNearIntentsKeyPairString() (string, error) {
 	keypair, err := u.derivedSolanaKeypair()
 	if err != nil {
 		return "", err
 	}
 	return "ed25519:" + base58.Encode(keypair), nil
+}
+
+func (u *UserKeys) auxSolanaKeypair() (ed25519.PrivateKey, error) {
+	priv, err := u.auxSpendKeySeed()
+	if err != nil {
+		return nil, err
+	}
+	seed := common.FromHex(priv)
+	if len(seed) != ed25519.SeedSize {
+		return nil, errors.New("cryptokeys: aux spend key is not a 32-byte seed")
+	}
+	return ed25519.NewKeyFromSeed(seed), nil
 }
 
 func (u *UserKeys) derivedSolanaKeypair() (ed25519.PrivateKey, error) {

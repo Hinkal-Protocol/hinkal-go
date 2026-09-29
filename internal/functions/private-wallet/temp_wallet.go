@@ -69,6 +69,13 @@ func DeriveTempWalletFromEVMPrivateKey(chainID int, evmPrivateKey string) (Deriv
 	return DerivedTempWallet{Address: evmAddress, PrivateKey: evmPrivateKey}, nil
 }
 
+func tempWalletEVMPrivateKey(userKeys *cryptokeys.UserKeys, nonce *big.Int, isLegacy bool) (string, error) {
+	if isLegacy {
+		return userKeys.GetLegacySignerPrivateKeyFromNonce(nonce)
+	}
+	return userKeys.GetSignerPrivateKeyFromNonce(nonce)
+}
+
 func BuildTempSubAccount(nonce *big.Int, chainID int, wallet DerivedTempWallet) types.TemporarySubAccount {
 	subAccount := types.TemporarySubAccount{Index: int(nonce.Int64())}
 	if constants.IsSolanaLike(chainID) {
@@ -81,8 +88,10 @@ func BuildTempSubAccount(nonce *big.Int, chainID int, wallet DerivedTempWallet) 
 	return subAccount
 }
 
-func BuildTempSubAccountForChain(userKeys *cryptokeys.UserKeys, chainID int, nonce *big.Int) (types.TemporarySubAccount, error) {
-	evmPrivateKey, err := userKeys.GetSignerPrivateKeyFromNonce(nonce)
+// BuildTempSubAccountForChain derives the temp wallet for a nonce; isLegacy comes from the server's
+// nonce entry (nk-derived wallets), newly issued nonces are never legacy.
+func BuildTempSubAccountForChain(userKeys *cryptokeys.UserKeys, chainID int, nonce *big.Int, isLegacy bool) (types.TemporarySubAccount, error) {
+	evmPrivateKey, err := tempWalletEVMPrivateKey(userKeys, nonce, isLegacy)
 	if err != nil {
 		return types.TemporarySubAccount{}, err
 	}
@@ -94,7 +103,7 @@ func BuildTempSubAccountForChain(userKeys *cryptokeys.UserKeys, chainID int, non
 }
 
 func DeriveBridgeTempWallets(userKeys *cryptokeys.UserKeys, sourceChainID, destinationChainID int, nonce *big.Int) (BridgeTempWallets, error) {
-	evmPrivateKey, err := userKeys.GetSignerPrivateKeyFromNonce(nonce)
+	evmPrivateKey, err := tempWalletEVMPrivateKey(userKeys, nonce, false)
 	if err != nil {
 		return BridgeTempWallets{}, err
 	}

@@ -65,40 +65,34 @@ var SnapshotServerConfig = struct {
 	Events:             "/events",
 }
 
-// RelayerConfig mirrors RELAYER_CONFIG from server.constants.ts.
+// RelayerConfig mirrors RELAYER_CONFIG from server.constants.ts. These routes are served
+// by henclave now; the config name is kept to match the TS side.
 var RelayerConfig = struct {
-	GetGasEstimate                           func(tokenAddress, externalActionID string, erc20TokenAddressLength int, gasAmount *int) string
 	Transact                                 string
-	TransactBatch                            string
 	SolanaTransact                           string
-	SolanaTransactBatch                      string
+	ScheduleTransactions                     string
 	SolanaSponsoredBuild                     string
 	SolanaSponsoredSubmit                    string
 	GetIdleRelay                             string
+	GetSolanaRelayAddress                    string
 	GetScheduledTransactions                 string
 	GetScheduledTransactionByID              func(scheduleID string) string
 	GetScheduledTransactionsNullifierIndexes string
 }{
-	GetGasEstimate: func(tokenAddress, externalActionID string, erc20TokenAddressLength int, gasAmount *int) string {
-		gas := "undefined"
-		if gasAmount != nil {
-			gas = strconv.Itoa(*gasAmount)
-		}
-		return fmt.Sprintf("/gas-estimation/%s/%d/%s/%s", tokenAddress, erc20TokenAddressLength, externalActionID, gas)
-	},
 	Transact:                                 "/general-transact",
-	TransactBatch:                            "/general-transact-batch",
 	SolanaTransact:                           "/solana-transact",
-	SolanaTransactBatch:                      "/solana-transact-batch",
+	ScheduleTransactions:                     "/schedule-transactions",
 	SolanaSponsoredBuild:                     "/solana-sponsored-build",
 	SolanaSponsoredSubmit:                    "/solana-sponsored-submit",
 	GetIdleRelay:                             "/get-idle-relay",
+	GetSolanaRelayAddress:                    "/solana-relay-address",
 	GetScheduledTransactions:                 "/scheduled-transactions",
 	GetScheduledTransactionByID:              func(scheduleID string) string { return "/scheduled-transactions/" + scheduleID },
 	GetScheduledTransactionsNullifierIndexes: "/scheduled-transactions/nullifier-indexes",
 }
 
 var DataServerConfig = struct {
+	GetGasEstimate                    func(tokenAddress, externalActionID string, erc20TokenAddressLength int, gasAmount *int) string
 	GetTokenPrices                    string
 	GetTokenPriceChartData            string
 	GetTokenPreviousDayPrices         string
@@ -108,6 +102,13 @@ var DataServerConfig = struct {
 	GetPrivateTransactionsRatio       func(hashedOwner string) string
 	SavePrivacyScoreAndGetPrivacyRank string
 }{
+	GetGasEstimate: func(tokenAddress, externalActionID string, erc20TokenAddressLength int, gasAmount *int) string {
+		gas := "undefined"
+		if gasAmount != nil {
+			gas = strconv.Itoa(*gasAmount)
+		}
+		return fmt.Sprintf("/gas-estimation/%s/%d/%s/%s", tokenAddress, erc20TokenAddressLength, externalActionID, gas)
+	},
 	GetTokenPrices:                    "/get-token-prices",
 	GetTokenPriceChartData:            "/get-token-price-chart-data",
 	GetTokenPreviousDayPrices:         "/get-token-previous-day-prices",
@@ -121,7 +122,6 @@ var DataServerConfig = struct {
 // EnclaveConfig holds enclave-server route paths (inlined in TS enclave calls).
 var EnclaveConfig = struct {
 	Handshake                  string
-	DecryptUtxos               string
 	GenerateProofs             string
 	StoreClaimableKey          string
 	GetUtxos                   string
@@ -138,7 +138,6 @@ var EnclaveConfig = struct {
 	GetBalances                string
 }{
 	Handshake:                  "/handshake",
-	DecryptUtxos:               "/decrypt-utxos",
 	GenerateProofs:             "/generate-proofs",
 	StoreClaimableKey:          "/store-claimable-key",
 	GetUtxos:                   "/get-user-utxos",

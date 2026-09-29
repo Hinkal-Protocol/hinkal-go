@@ -218,7 +218,7 @@ func hinkalNearBridgePrivateOut(
 	if err != nil {
 		return bridging.PrivateBridgeOutResult{}, err
 	}
-	tempSubAccount, err := privatewallet.BuildTempSubAccountForChain(hinkal.GetUserKeys(), destChainID, nonce)
+	tempSubAccount, err := privatewallet.BuildTempSubAccountForChain(hinkal.GetUserKeys(), destChainID, nonce, false)
 	if err != nil {
 		return bridging.PrivateBridgeOutResult{}, err
 	}

@@ -8,9 +8,11 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/mr-tron/base58"
 
 	"github.com/Hinkal-Protocol/hinkal-go/internal/api"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
+	"github.com/Hinkal-Protocol/hinkal-go/internal/crypto"
 	cryptokeys "github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/crypto-keys"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/utils"
 )
@@ -48,6 +50,25 @@ func GetRemoteManagedTokenBalances(
 	}
 
 	return balancesFromResults(resp.Results)
+}
+
+var mask128 = new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 128), big.NewInt(1))
+
+func normalizeSolanaMint(mintHex string) (compressedHex, base58Mint string, err error) {
+	clean := common.FromHex(mintHex)
+	if len(clean) != 32 {
+		return "", "", fmt.Errorf("invalid mint address: expected 32 bytes, got %d", len(clean))
+	}
+	base58Mint = base58.Encode(clean)
+
+	mintBig := new(big.Int).SetBytes(clean)
+	part1 := new(big.Int).Rsh(mintBig, 128)
+	part2 := new(big.Int).And(mintBig, mask128)
+	compressed, err := crypto.PoseidonBig(part1, part2)
+	if err != nil {
+		return "", "", err
+	}
+	return utils.ToBeHex(compressed), base58Mint, nil
 }
 
 func balancesFromResults(results []api.ChainBalancesEntry) (map[int]map[string]*big.Int, error) {

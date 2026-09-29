@@ -187,6 +187,27 @@ func CalcCommitmentsSiblingAndSides(
 	inputUtxos [][]*utxo.Utxo,
 	merkleTree merkletree.MerkleTree,
 ) (inCommitmentSiblings, inCommitmentSiblingSides [][][]string, err error) {
+	// A commitment missing from the tree yields an all-zero sibling path rather than an error,
+	// which only surfaces as an on-chain revert. Zero-amount padding notes are never inserted.
+	for _, token := range inputUtxos {
+		for _, u := range token {
+			if u.Amount == nil || u.Amount.Sign() == 0 {
+				continue
+			}
+			commitment, err := u.GetCommitment()
+			if err != nil {
+				return nil, nil, err
+			}
+			commitmentBig, err := utils.ParseBigInt(commitment)
+			if err != nil {
+				return nil, nil, err
+			}
+			if !merkleTree.Contains(commitmentBig) {
+				return nil, nil, fmt.Errorf("input commitment %s is not in the merkle tree", commitmentBig.String())
+			}
+		}
+	}
+
 	inCommitmentSiblings = make([][][]string, len(inputUtxos))
 	inCommitmentSiblingSides = make([][][]string, len(inputUtxos))
 	for i, token := range inputUtxos {

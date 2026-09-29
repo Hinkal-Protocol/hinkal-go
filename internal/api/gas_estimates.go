@@ -29,7 +29,7 @@ func GetGasEstimates(
 	gasAmount *int,
 	solanaTransactionParams *SolanaGasEstimateParams,
 ) (*GetGasEstimatesResponse, error) {
-	url := constants.GetRelayerURL() + constants.RelayerConfig.GetGasEstimate(tokenAddress, externalActionID, erc20TokenAddressLength, gasAmount)
+	url := constants.GetDataServerURL() + constants.DataServerConfig.GetGasEstimate(tokenAddress, externalActionID, erc20TokenAddressLength, gasAmount)
 	body := map[string]any{
 		"calls":                   calls,
 		"solanaTransactionParams": solanaTransactionParams,

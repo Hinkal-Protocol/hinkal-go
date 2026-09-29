@@ -35,19 +35,6 @@ func FetchTransactionWithRetry(ctx context.Context, chainID int, signature strin
 	return nil, fmt.Errorf("solanautils: Solana transaction %s missing", signature)
 }
 
-func TransactionEvents(meta *solanadata.TxMeta) []*solanadata.DecodedEvent {
-	events := solanadata.ParseLogsForEvents(meta.LogMessages)
-	var cpiData []string
-	for _, inner := range meta.InnerInstructions {
-		for _, ix := range inner.Instructions {
-			if ix.Data != "" {
-				cpiData = append(cpiData, ix.Data)
-			}
-		}
-	}
-	return append(events, solanadata.ParseCpiForEvents(cpiData)...)
-}
-
 func IntSliceArg(value any) ([]int, bool) {
 	switch v := value.(type) {
 	case []int:

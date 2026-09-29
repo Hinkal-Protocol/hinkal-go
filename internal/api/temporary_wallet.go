@@ -7,8 +7,15 @@ import (
 	"github.com/Hinkal-Protocol/hinkal-go/internal/types"
 )
 
+type TemporaryWalletNonceEntry struct {
+	Nonce               int                                      `json:"nonce"`
+	RecoveryDestination types.TemporaryWalletRecoveryDestination `json:"recoveryDestination"`
+	IsLegacy            bool                                     `json:"isLegacy"`
+}
+
 type TemporaryWalletNoncesResponse struct {
-	Nonces []int `json:"nonces"`
+	Nonces       []int                       `json:"nonces"`
+	NonceEntries []TemporaryWalletNonceEntry `json:"nonceEntries"`
 }
 
 type TemporaryWalletNonceRequest struct {
@@ -16,6 +23,7 @@ type TemporaryWalletNonceRequest struct {
 	ChainID               int                                      `json:"chainId"`
 	Nonce                 int                                      `json:"nonce"`
 	RecoveryDestination   types.TemporaryWalletRecoveryDestination `json:"recoveryDestination,omitempty"`
+	UsesAuxKey            bool                                     `json:"usesAuxKey,omitempty"`
 }
 
 type TemporaryWalletNonceResponse struct {
@@ -39,6 +47,7 @@ func AddTemporaryWalletNonce(ctx context.Context, chainID int, hashedEthereumAdd
 		ChainID:               chainID,
 		Nonce:                 nonce,
 		RecoveryDestination:   recoveryDestination,
+		UsesAuxKey:            true,
 	}, &resp); err != nil {
 		return TemporaryWalletNonceResponse{}, err
 	}

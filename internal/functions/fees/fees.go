@@ -14,7 +14,18 @@ import (
 	"github.com/Hinkal-Protocol/hinkal-go/internal/types"
 )
 
-var errFailedTokenPrices = errors.New("failed to get token prices")
+var (
+	errFailedTokenPrices          = errors.New("failed to get token prices")
+	errSolanaFeeTokenMintMismatch = errors.New("solana fee token mismatch: fee must be paid in the token being sent")
+)
+
+// AssertSolanaFeeTokenMatchesMint guards flat fees that are subtracted from the sent mint's base units.
+func AssertSolanaFeeTokenMatchesMint(feeStructure types.FeeStructure, mintAddress string) error {
+	if feeStructure.FeeToken != mintAddress {
+		return errSolanaFeeTokenMintMismatch
+	}
+	return nil
+}
 
 func GetGasTokenSymbols(ctx context.Context, chainID int) ([]string, error) {
 	if chainID == 0 {

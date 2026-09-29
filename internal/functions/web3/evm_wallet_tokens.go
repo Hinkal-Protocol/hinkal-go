@@ -65,10 +65,12 @@ func GetEvmWalletTokenAddresses(ctx context.Context, chainID int, walletAddress 
 		return nil, err
 	}
 	if nativeBalance != nil && nativeBalance.Sign() > 0 {
-		// Arc testnet's gas token is USDC under the hood - representing it at zeroAddress here
+		// Arc's gas token is USDC under the hood - representing it at zeroAddress here
 		// too would show up as a second, duplicate USDC balance.
 		nativeAddress := constants.ZeroAddress
-		if constants.IsArcTestnet(chainID) {
+		if constants.IsArcMainnet(chainID) {
+			nativeAddress = constants.ArcMainnetUSDCAddress
+		} else if constants.IsArcTestnet(chainID) {
 			nativeAddress = constants.ArcTestnetUSDCAddress
 		}
 		balances = append(balances, api.EvmTokenBalanceEntry{ContractAddress: nativeAddress, TokenBalance: nativeBalance.String()})

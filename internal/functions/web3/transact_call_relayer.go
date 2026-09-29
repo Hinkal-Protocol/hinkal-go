@@ -64,7 +64,7 @@ func SolanaTransactCallRelayerBatch(
 	hashedDashboardAccountID string,
 	dependsOnTxHash string,
 ) (string, error) {
-	resp, err := api.CallRelayerSolanaTransactBatchAPI(ctx, api.SolanaTransactionBatchRequestBody{
+	resp, err := api.CallScheduleSolanaTransactionsAPI(ctx, api.SolanaTransactionBatchRequestBody{
 		ChainID:                  chainID,
 		Transactions:             transactions,
 		HashedEthereumAddress:    hashedEthereumAddress,
@@ -140,7 +140,7 @@ func TransactCallRelayerBatch(
 			TronProofSignature:       tx.TronProofSignature,
 		}
 	}
-	resp, err := api.CallRelayerTransactBatchAPI(ctx, api.HinkalTransactionBatchRequestBody{
+	resp, err := api.CallScheduleTransactionsAPI(ctx, api.HinkalTransactionBatchRequestBody{
 		ChainID:                  chainID,
 		Transactions:             bodies,
 		HashedEthereumAddress:    hashedEthereumAddress,

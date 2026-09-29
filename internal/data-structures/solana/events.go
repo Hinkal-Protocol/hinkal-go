@@ -1,20 +1,28 @@
 package solana
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/binary"
+	"slices"
 	"strings"
 
 	"github.com/mr-tron/base58"
 )
 
-const programDataPrefix = "Program data: "
-const solanaOnChainFields = 9
+const (
+	programDataPrefix   = "Program data: "
+	programLinePrefix   = "Program "
+	solanaOnChainFields = 9
+	minProgramIDLength  = 32
+	maxProgramIDLength  = 44
+)
 
 var (
 	discNewCommitment       = [8]byte{78, 21, 75, 243, 5, 132, 204, 67}
 	discNullified           = [8]byte{124, 69, 200, 64, 75, 203, 121, 17}
 	discBlockedUtxosCreated = [8]byte{64, 214, 216, 215, 75, 156, 106, 107}
+	anchorEventIxTagLE      = []byte{0xe4, 0x45, 0xa5, 0x2e, 0x51, 0xcb, 0x9a, 0x1d}
 )
 
 type DecodedEvent struct {
@@ -88,32 +96,68 @@ func toIntSlice(b []byte) []int {
 	return out
 }
 
-func ParseLogsForEvents(logs []string) []*DecodedEvent {
+func ParseTransactionEvents(tx *Transaction, programID string) []*DecodedEvent {
+	if tx == nil || tx.Meta == nil {
+		return nil
+	}
+	return append(parseProgramLogs(tx.Meta.LogMessages, programID), parseProgramCpi(tx, programID)...)
+}
+
+func isProgramID(token string) bool {
+	return len(token) >= minProgramIDLength && len(token) <= maxProgramIDLength
+}
+
+func parseProgramLogs(logs []string, programID string) []*DecodedEvent {
 	var out []*DecodedEvent
+	var invokeStack []string
 	for _, line := range logs {
-		if !strings.HasPrefix(line, programDataPrefix) {
+		if encoded, ok := strings.CutPrefix(line, programDataPrefix); ok {
+			if len(invokeStack) == 0 || invokeStack[len(invokeStack)-1] != programID {
+				continue
+			}
+			raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(encoded))
+			if err != nil {
+				continue
+			}
+			if ev, ok := decodeEventData(raw); ok {
+				out = append(out, ev)
+			}
 			continue
 		}
-		raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(line[len(programDataPrefix):]))
-		if err != nil {
+		rest, ok := strings.CutPrefix(line, programLinePrefix)
+		if !ok {
 			continue
 		}
-		if ev, ok := decodeEventData(raw); ok {
-			out = append(out, ev)
+		id, action, ok := strings.Cut(rest, " ")
+		if !ok || !isProgramID(id) {
+			continue
+		}
+		switch {
+		case strings.HasPrefix(action, "invoke ["):
+			invokeStack = append(invokeStack, id)
+		case (strings.HasPrefix(action, "success") || strings.HasPrefix(action, "failed")) && len(invokeStack) > 0:
+			invokeStack = invokeStack[:len(invokeStack)-1]
 		}
 	}
 	return out
 }
 
-func ParseCpiForEvents(instructionData []string) []*DecodedEvent {
+func parseProgramCpi(tx *Transaction, programID string) []*DecodedEvent {
+	keys := append(append(slices.Clone(tx.Transaction.Message.AccountKeys),
+		tx.Meta.LoadedAddresses.Writable...), tx.Meta.LoadedAddresses.Readonly...)
 	var out []*DecodedEvent
-	for _, data := range instructionData {
-		raw, err := base58.Decode(data)
-		if err != nil || len(raw) <= 8 {
-			continue
-		}
-		if ev, ok := decodeEventData(raw[8:]); ok {
-			out = append(out, ev)
+	for _, inner := range tx.Meta.InnerInstructions {
+		for _, ix := range inner.Instructions {
+			if ix.ProgramIDIndex < 0 || ix.ProgramIDIndex >= len(keys) || keys[ix.ProgramIDIndex] != programID {
+				continue
+			}
+			raw, err := base58.Decode(ix.Data)
+			if err != nil || len(raw) <= len(anchorEventIxTagLE) || !bytes.HasPrefix(raw, anchorEventIxTagLE) {
+				continue
+			}
+			if ev, ok := decodeEventData(raw[len(anchorEventIxTagLE):]); ok {
+				out = append(out, ev)
+			}
 		}
 	}
 	return out

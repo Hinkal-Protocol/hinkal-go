@@ -2,9 +2,15 @@ package enclave
 
 import (
 	"context"
+	"errors"
 
 	"github.com/Hinkal-Protocol/hinkal-go/internal/api"
 )
+
+type signatureData struct {
+	EthAddress string `json:"ethAddress"`
+	Signature  string `json:"signature"`
+}
 
 func StoreAndGetSignatureFromEnclave(
 	ctx context.Context,
@@ -28,5 +34,15 @@ func StoreAndGetSignatureFromEnclave(
 	if err != nil {
 		return "", err
 	}
-	return resp.Signature, nil
+	if resp.Data == "" || resp.EnclaveSignature == "" {
+		return "", errors.New("enclave signature response is not signed")
+	}
+	verified, err := verifySignedEnclaveResponse[signatureData](resp.Data, resp.EnclaveSignature)
+	if err != nil {
+		return "", err
+	}
+	if verified.EthAddress != ethAddress {
+		return "", errors.New("enclave signature response is for a different address")
+	}
+	return verified.Signature, nil
 }

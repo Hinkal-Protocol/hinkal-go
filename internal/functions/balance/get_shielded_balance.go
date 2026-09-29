@@ -22,10 +22,9 @@ func GetShieldedBalances(
 	ethAddressByChain map[int]string,
 	passedShieldedPublicKey string,
 	resetCacheBefore bool,
-	allowRemoteDecryption bool,
 	useBlockedUtxos bool,
 ) (map[int][]types.TokenBalance, error) {
-	if allowRemoteDecryption {
+	if hinkal.GenerateProofRemotely() {
 		return getRemoteShieldedBalances(ctx, hinkal, ethAddressByChain, useBlockedUtxos)
 	}
 
@@ -151,7 +150,6 @@ func getLocalShieldedBalance(
 		PassedShieldedPublicKey: passedShieldedPublicKey,
 		EthAddress:              ethAddress,
 		ResetCacheBefore:        resetCacheBefore,
-		AllowRemoteDecryption:   false,
 	}
 
 	var inputUtxos []*utxo.Utxo

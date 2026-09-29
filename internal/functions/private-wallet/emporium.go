@@ -27,7 +27,10 @@ type emporiumMetadataTuple struct {
 	Deadline      *big.Int
 }
 
-const emporiumSignatureDefaultTTL = 20 * time.Minute
+const (
+	emporiumSignatureDefaultTTL = 20 * time.Minute
+	emporiumMaxExecuteAfter     = 2 * 24 * time.Hour
+)
 
 var emporiumOpComponents = []abi.ArgumentMarshaling{
 	{Name: "endpoint", Type: "address"},
@@ -44,6 +47,7 @@ func EncodeEmporiumMetadata(
 	emporiumMessage *big.Int,
 	signerAddress string,
 	maxFee *big.Int,
+	executeAfter *int,
 ) (string, error) {
 	if emporiumMessage == nil {
 		emporiumMessage = big.NewInt(0)
@@ -56,7 +60,19 @@ func EncodeEmporiumMetadata(
 		if maxFee == nil {
 			return "", errors.New("privatewallet: maxFee required if making tx from emporium")
 		}
-		deadline = big.NewInt(time.Now().Add(emporiumSignatureDefaultTTL).Unix())
+		// Scheduled txs execute at executeAfter (unix seconds), so the signature must outlive that time.
+		now := time.Now()
+		signedFrom := now
+		if executeAfter != nil {
+			executeAt := time.Unix(int64(*executeAfter), 0)
+			if executeAt.Sub(now) > emporiumMaxExecuteAfter {
+				return "", errors.New("privatewallet: executeAfter must be a unix timestamp in seconds at most 2 days ahead")
+			}
+			if executeAt.After(now) {
+				signedFrom = executeAt
+			}
+		}
+		deadline = big.NewInt(signedFrom.Add(emporiumSignatureDefaultTTL).Unix())
 		var err error
 		v, r, s, err = signEmporium(chainID, emporiumAddress, privateKey, ops, emporiumMessage, maxFee, deadline)
 		if err != nil {

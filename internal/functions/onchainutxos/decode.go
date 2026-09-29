@@ -74,14 +74,24 @@ func DecodeSolanaFromTransaction(
 	tx *solanadata.Transaction,
 	userKeys *cryptokeys.UserKeys,
 	compressedMintAddress string,
+	chainID ...int,
 ) ([]*utxo.Utxo, error) {
 	if tx == nil || tx.Meta == nil {
 		return nil, nil
 	}
 
+	chain := constants.ChainIDs.SolanaMainnet
+	if len(chainID) > 0 {
+		chain = chainID[0]
+	}
+	programID, err := constants.HinkalAddress(chain)
+	if err != nil {
+		return nil, err
+	}
+
 	seen := map[string]struct{}{}
 	deposited := make([]*utxo.Utxo, 0)
-	for _, event := range solanautils.TransactionEvents(tx.Meta) {
+	for _, event := range solanadata.ParseTransactionEvents(tx, programID) {
 		if event.Name != "NewCommitment" {
 			continue
 		}

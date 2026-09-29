@@ -188,7 +188,7 @@ func actionPrivateWallet(
 				return "", err
 			}
 		}
-		encoded, err := privatewallet.EncodeEmporiumMetadata(chainID, contractData.EmporiumAddress, subAccountPrivateKey, ops, emporiumMessage, subAccountSignerAddress, feeStructure.FlatFee)
+		encoded, err := privatewallet.EncodeEmporiumMetadata(chainID, contractData.EmporiumAddress, subAccountPrivateKey, ops, emporiumMessage, subAccountSignerAddress, feeStructure.FlatFee, nil)
 		if err != nil {
 			return "", err
 		}

@@ -181,7 +181,7 @@ func (e *SolanaBlockchainEventEmitter) getProgramEvents(ctx context.Context, fro
 		if err != nil || tx == nil || tx.Meta == nil || tx.Meta.Err != nil {
 			continue
 		}
-		for _, d := range parseSolanaTransaction(tx.Meta) {
+		for _, d := range parseSolanaTransaction(tx, e.programID) {
 			ev, err := blockchainevent.NewFromSolanaEvent(d, sig.Signature, sig.Slot)
 			if err != nil {
 				continue
@@ -259,19 +259,8 @@ func (e *SolanaBlockchainEventEmitter) startUpdateListener(ctx context.Context) 
 	})
 }
 
-func parseSolanaTransaction(meta *solana.TxMeta) []*solana.DecodedEvent {
-	logEvents := solana.ParseLogsForEvents(meta.LogMessages)
-	var cpiData []string
-	for _, inner := range meta.InnerInstructions {
-		for _, ix := range inner.Instructions {
-			if ix.Data != "" {
-				cpiData = append(cpiData, ix.Data)
-			}
-		}
-	}
-	merged := make([]*solana.DecodedEvent, 0, len(logEvents))
-	merged = append(merged, logEvents...)
-	merged = append(merged, solana.ParseCpiForEvents(cpiData)...)
+func parseSolanaTransaction(tx *solana.Transaction, programID string) []*solana.DecodedEvent {
+	merged := solana.ParseTransactionEvents(tx, programID)
 	if len(merged) == 0 {
 		return nil
 	}

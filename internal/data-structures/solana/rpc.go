@@ -115,7 +115,8 @@ func (c *Client) GetSignaturesForAddress(ctx context.Context, address string, li
 }
 
 type Instruction struct {
-	Data string `json:"data"`
+	ProgramIDIndex int    `json:"programIdIndex"`
+	Data           string `json:"data"`
 }
 
 type InnerInstruction struct {
@@ -126,12 +127,27 @@ type TxMeta struct {
 	Err               any                `json:"err"`
 	LogMessages       []string           `json:"logMessages"`
 	InnerInstructions []InnerInstruction `json:"innerInstructions"`
+	LoadedAddresses   LoadedAddresses    `json:"loadedAddresses"`
+}
+
+type LoadedAddresses struct {
+	Writable []string `json:"writable"`
+	Readonly []string `json:"readonly"`
+}
+
+type TxMessage struct {
+	AccountKeys []string `json:"accountKeys"`
+}
+
+type TxBody struct {
+	Message TxMessage `json:"message"`
 }
 
 type Transaction struct {
-	Slot      uint64  `json:"slot"`
-	BlockTime *int64  `json:"blockTime"`
-	Meta      *TxMeta `json:"meta"`
+	Slot        uint64  `json:"slot"`
+	BlockTime   *int64  `json:"blockTime"`
+	Meta        *TxMeta `json:"meta"`
+	Transaction TxBody  `json:"transaction"`
 }
 
 func (c *Client) GetTransaction(ctx context.Context, signature string) (*Transaction, error) {

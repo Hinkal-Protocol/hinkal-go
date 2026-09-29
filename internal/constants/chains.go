@@ -14,6 +14,7 @@ type chainIDs struct {
 	Optimism       int
 	Base           int
 	Localhost      int
+	ArcMainnet     int
 	ArcTestnet     int
 	SepoliaTestnet int
 	SolanaMainnet  int
@@ -23,6 +24,7 @@ type chainIDs struct {
 	TronLocalnet   int
 	TronMainnet    int
 	Tempo          int
+	Robinhood      int
 	BNBMainnet     int
 
 	// Bridge-destination-only chains (no Hinkal contracts deployed; reachable only as LiFi bridge targets).
@@ -41,6 +43,7 @@ var ChainIDs = chainIDs{
 	Optimism:       10,
 	Base:           8453,
 	Localhost:      31337,
+	ArcMainnet:     5042,
 	ArcTestnet:     5042002,
 	SepoliaTestnet: 11155111,
 	SolanaMainnet:  501,
@@ -50,6 +53,7 @@ var ChainIDs = chainIDs{
 	TronLocalnet:   103,
 	TronMainnet:    728126428,
 	Tempo:          4217,
+	Robinhood:      4663,
 	BNBMainnet:     56,
 
 	// Bridge-destination-only chains (no Hinkal contracts deployed; reachable only as LiFi bridge targets).
@@ -124,6 +128,14 @@ var EthereumNetworkRegistry = map[int]types.EthereumNetwork{
 		Priority:    7,
 		MaxPageSize: 500000,
 	},
+	ChainIDs.ArcMainnet: {
+		Name:        "Arc",
+		ChainID:     ChainIDs.ArcMainnet,
+		RPCURL:      "https://rpc.mainnet.arc.io",
+		Supported:   true,
+		Priority:    8,
+		MaxPageSize: 9999,
+	},
 	ChainIDs.ArcTestnet: {
 		Name:        "Arc Testnet",
 		ChainID:     ChainIDs.ArcTestnet,
@@ -193,6 +205,14 @@ var EthereumNetworkRegistry = map[int]types.EthereumNetwork{
 		Priority:    13,
 		MaxPageSize: 900000,
 	},
+	ChainIDs.Robinhood: {
+		Name:        "Robinhood",
+		ChainID:     ChainIDs.Robinhood,
+		RPCURL:      "https://rpc.mainnet.chain.robinhood.com",
+		Supported:   true,
+		Priority:    14,
+		MaxPageSize: 500000,
+	},
 
 	// Bridge-destination-only chains: no Hinkal contracts, only valid as LiFi bridge targets in pay/dashboard.
 	ChainIDs.Avalanche: {
@@ -250,12 +270,14 @@ var HinkalSupportedChains = []int{
 	ChainIDs.Polygon,
 	ChainIDs.ArbMainnet,
 	ChainIDs.BNBMainnet,
+	ChainIDs.ArcMainnet,
 	ChainIDs.ArcTestnet,
 	ChainIDs.SolanaMainnet,
 	ChainIDs.SepoliaTestnet,
 	ChainIDs.TronMainnet,
 	ChainIDs.TronNile,
 	ChainIDs.Tempo,
+	ChainIDs.Robinhood,
 }
 
 var EVMChainIDs = func() []int {
@@ -347,9 +369,11 @@ var SaveDepths = map[int]uint64{
 	ChainIDs.ArbMainnet:     8000,
 	ChainIDs.Optimism:       6000,
 	ChainIDs.Base:           6000,
+	ChainIDs.ArcMainnet:     8000,
 	ChainIDs.ArcTestnet:     8000,
 	ChainIDs.SepoliaTestnet: 1000,
 	ChainIDs.Tempo:          4000,
+	ChainIDs.Robinhood:      20000,
 	ChainIDs.Localhost:      1,
 	ChainIDs.SolanaMainnet:  1000,
 	ChainIDs.SolanaLocalnet: 100,
@@ -366,9 +390,11 @@ var BlockReorgDepths = map[int]uint64{
 	ChainIDs.ArbMainnet:     1000,
 	ChainIDs.Optimism:       1000,
 	ChainIDs.Base:           1000,
+	ChainIDs.ArcMainnet:     30,
 	ChainIDs.ArcTestnet:     30,
 	ChainIDs.SepoliaTestnet: 300,
 	ChainIDs.Tempo:          1000,
+	ChainIDs.Robinhood:      2500,
 	ChainIDs.TronNile:       19,
 	ChainIDs.TronMainnet:    19,
 	ChainIDs.TronLocalnet:   1,
@@ -409,6 +435,10 @@ func IsSepoliaTestnet(chainID int) bool {
 
 func IsTempo(chainID int) bool {
 	return chainID == ChainIDs.Tempo
+}
+
+func IsArcMainnet(chainID int) bool {
+	return chainID == ChainIDs.ArcMainnet
 }
 
 func IsArcTestnet(chainID int) bool {

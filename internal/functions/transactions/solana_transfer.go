@@ -19,7 +19,6 @@ var errSolanaTransferOneMint = errors.New("Solana Transfer: Only one mint addres
 func resolveSolanaTransferFeeStructure(
 	ctx context.Context,
 	chainID int,
-	feeToken string,
 	mintAddresses []string,
 	feeStructureOverride *types.FeeStructure,
 	solanaTransactionParams *api.SolanaGasEstimateParams,
@@ -32,7 +31,7 @@ func resolveSolanaTransferFeeStructure(
 		feeStructure, err = pretransaction.GetFeeStructure(
 			ctx,
 			chainID,
-			feeToken,
+			mintAddresses[0],
 			mintAddresses,
 			types.ExternalActionTransact,
 			nil,
@@ -42,6 +41,9 @@ func resolveSolanaTransferFeeStructure(
 		if err != nil {
 			return types.FeeStructure{}, err
 		}
+	}
+	if err := fees.AssertSolanaFeeTokenMatchesMint(feeStructure, mintAddresses[0]); err != nil {
+		return types.FeeStructure{}, err
 	}
 	feeStructure = normalizeFeeStructure(feeStructure)
 	if feeStructure.VariableRate.Sign() == 0 {
@@ -56,7 +58,6 @@ func HinkalSolanaTransfer(
 	erc20Tokens []types.ERC20Token,
 	amountChangesBase []*big.Int,
 	recipientAddress string,
-	feeToken string,
 	feeStructureOverride *types.FeeStructure,
 ) (string, error) {
 	chainID, err := pretransaction.ValidateAndGetChainID(erc20Tokens)
@@ -84,14 +85,11 @@ func HinkalSolanaTransfer(
 	if err := ensureSolanaDeployData(chainID); err != nil {
 		return "", err
 	}
-	if feeToken == "" {
-		feeToken = mintAddresses[0]
-	}
 	solanaParams := &api.SolanaGasEstimateParams{
-		MintTo:         feeToken,
+		MintTo:         mintAddresses[0],
 		NullifierCount: pretransaction.CalculateSolanaNullifierCount(ctx, hinkal, chainID, mintAddresses, amountChanges),
 	}
-	feeStructure, err := resolveSolanaTransferFeeStructure(ctx, chainID, feeToken, mintAddresses, feeStructureOverride, solanaParams)
+	feeStructure, err := resolveSolanaTransferFeeStructure(ctx, chainID, mintAddresses, feeStructureOverride, solanaParams)
 	if err != nil {
 		return "", err
 	}

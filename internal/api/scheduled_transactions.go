@@ -18,7 +18,7 @@ type ScheduledTransactionsNullifierIndexesResponse struct {
 
 func GetScheduledTransactionsNullifierIndexes(ctx context.Context, body ScheduledTransactionsNullifierIndexesRequest) (*ScheduledTransactionsNullifierIndexesResponse, error) {
 	var resp ScheduledTransactionsNullifierIndexesResponse
-	if err := Post(ctx, constants.GetRelayerURL()+constants.RelayerConfig.GetScheduledTransactionsNullifierIndexes, body, &resp); err != nil {
+	if err := Post(ctx, constants.GetEnclaveURL()+constants.RelayerConfig.GetScheduledTransactionsNullifierIndexes, body, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -26,7 +26,7 @@ func GetScheduledTransactionsNullifierIndexes(ctx context.Context, body Schedule
 
 func GetScheduledTransactionByID(ctx context.Context, scheduleID string) (types.ScheduledTransactionByIDResponse, error) {
 	var resp types.ScheduledTransactionByIDResponse
-	if err := Get(ctx, constants.GetRelayerURL()+constants.RelayerConfig.GetScheduledTransactionByID(scheduleID), &resp); err != nil {
+	if err := Get(ctx, constants.GetEnclaveURL()+constants.RelayerConfig.GetScheduledTransactionByID(scheduleID), &resp); err != nil {
 		return types.ScheduledTransactionByIDResponse{}, err
 	}
 	return resp, nil

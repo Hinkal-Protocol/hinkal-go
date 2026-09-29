@@ -164,7 +164,7 @@ func (h *Hinkal) Withdraw(
 		return types.TransactionRequest{}, "", err
 	}
 	if constants.IsSolanaLike(chainID) {
-		txHash, err := transactions.HinkalSolanaWithdraw(ctx, h, erc20Tokens, amountChanges, recipientAddress, feeToken, feeStructureOverride, action)
+		txHash, err := transactions.HinkalSolanaWithdraw(ctx, h, erc20Tokens, amountChanges, recipientAddress, feeStructureOverride, action)
 		return types.TransactionRequest{}, txHash, err
 	}
 	return transactions.HinkalWithdraw(
@@ -197,7 +197,7 @@ func (h *Hinkal) Transfer(
 		return "", err
 	}
 	if constants.IsSolanaLike(chainID) {
-		return transactions.HinkalSolanaTransfer(ctx, h, erc20Tokens, amountChanges, recipientAddress, feeToken, feeStructureOverride)
+		return transactions.HinkalSolanaTransfer(ctx, h, erc20Tokens, amountChanges, recipientAddress, feeStructureOverride)
 	}
 	return transactions.HinkalTransfer(ctx, h, erc20Tokens, amountChanges, recipientAddress, feeToken, feeStructureOverride)
 }
@@ -437,13 +437,14 @@ func (h *Hinkal) Swap(
 	return transactions.HinkalSwap(ctx, h, erc20Tokens, deltaAmounts, externalActionID, swapData, feeToken, feeStructureOverride, constants.DefaultBridgingSlippage)
 }
 
+// feeToken is unused on Solana (fee is always paid in the output token) and kept for API compatibility.
 func (h *Hinkal) SwapSolana(
 	ctx context.Context,
 	chainID int,
 	erc20Addresses []string,
 	deltaAmounts []*big.Int,
 	swapData string,
-	feeToken string,
+	_feeToken string,
 	feeStructureOverride *types.FeeStructure,
 ) (string, error) {
 	var parsed struct {
@@ -469,7 +470,6 @@ func (h *Hinkal) SwapSolana(
 		salt,
 		parsed.Data.InstructionLists,
 		parsed.Data.AddressLookupTableAccount,
-		feeToken,
 		feeStructureOverride,
 	)
 }

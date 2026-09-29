@@ -56,15 +56,15 @@ type RelayerBatchResponse struct {
 
 func CallRelayerTransactAPI(ctx context.Context, body HinkalTransactionRequestBody) (RelayerResponse, error) {
 	var resp RelayerResponse
-	if err := Post(ctx, constants.GetRelayerURL()+constants.RelayerConfig.Transact, body, &resp); err != nil {
+	if err := Post(ctx, constants.GetEnclaveURL()+constants.RelayerConfig.Transact, body, &resp); err != nil {
 		return RelayerResponse{}, err
 	}
 	return resp, nil
 }
 
-func CallRelayerTransactBatchAPI(ctx context.Context, body HinkalTransactionBatchRequestBody) (RelayerBatchResponse, error) {
+func CallScheduleTransactionsAPI(ctx context.Context, body HinkalTransactionBatchRequestBody) (RelayerBatchResponse, error) {
 	var resp RelayerBatchResponse
-	if err := Post(ctx, constants.GetRelayerURL()+constants.RelayerConfig.TransactBatch, body, &resp); err != nil {
+	if err := Post(ctx, constants.GetEnclaveURL()+constants.RelayerConfig.ScheduleTransactions, body, &resp); err != nil {
 		return RelayerBatchResponse{}, err
 	}
 	return resp, nil

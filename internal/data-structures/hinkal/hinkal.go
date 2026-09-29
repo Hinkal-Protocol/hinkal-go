@@ -296,7 +296,6 @@ func (h *Hinkal) GetTotalBalances(
 		ethAddressByChain,
 		shieldedPublicKey,
 		resetCacheBefore,
-		h.generateProofRemotely,
 		useBlockedUtxos,
 	)
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/mr-tron/base58"
 
 	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
+	cryptokeys "github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/crypto-keys"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/utils"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/web3"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/types"
@@ -73,9 +74,12 @@ func derivedKey(tag string, parts ...string) *ecdsa.PrivateKey {
 }
 
 // GetReceiveVaultRecoveryWallet derives the only key that can recover from one vault: the factory
-// checks its address against the params it was deployed with.
-func GetReceiveVaultRecoveryWallet(shieldedPrivateKey string, terms types.ReceiveVaultTerms) (*ecdsa.PrivateKey, error) {
-	return derivedKey(recoveryTag, shieldedPrivateKey, receiveVaultScope(terms)), nil
+// checks its address against the params it was deployed with. The owner signer authorizes
+// recover()/output signing, so it is seeded by the aux spend key, not nk. H0/H1/stealth (see
+// GetReceiveVaultParams) stay nk-derived - that's the viewing/UTXO scheme, not an authorizer.
+// Vaults created under the old scheme were seeded by nk: pass it as the key to reach those.
+func GetReceiveVaultRecoveryWallet(auxSpendKey string, terms types.ReceiveVaultTerms) (*ecdsa.PrivateKey, error) {
+	return derivedKey(recoveryTag, auxSpendKey, receiveVaultScope(terms)), nil
 }
 
 // ReceiveVaultRandomizationSeed is the deterministic seed a vault's stealth address is built from,
@@ -94,13 +98,13 @@ func solanaOriginalDeployer(chainID int) (string, error) {
 	return originalDeployer, nil
 }
 
-func GetReceiveVaultSolanaOwner(shieldedPrivateKey string, terms types.ReceiveVaultTerms) ed25519.PrivateKey {
-	seed := gethcrypto.Keccak256([]byte(solanaOwnerTag + ":" + shieldedPrivateKey + ":" + receiveVaultScope(terms)))
+func GetReceiveVaultSolanaOwner(auxSpendKey string, terms types.ReceiveVaultTerms) ed25519.PrivateKey {
+	seed := gethcrypto.Keccak256([]byte(solanaOwnerTag + ":" + auxSpendKey + ":" + receiveVaultScope(terms)))
 	return ed25519.NewKeyFromSeed(seed)
 }
 
-func GetReceiveVaultSolanaOwnerAddress(shieldedPrivateKey string, terms types.ReceiveVaultTerms) string {
-	pub := GetReceiveVaultSolanaOwner(shieldedPrivateKey, terms).Public().(ed25519.PublicKey)
+func GetReceiveVaultSolanaOwnerAddress(auxSpendKey string, terms types.ReceiveVaultTerms) string {
+	pub := GetReceiveVaultSolanaOwner(auxSpendKey, terms).Public().(ed25519.PublicKey)
 	return base58.Encode(pub)
 }
 
@@ -406,7 +410,8 @@ func GetReceiveVaultOutputDigest(chainID int, factoryAddress, vault string, encr
 // for every settlement but can never swap the note it carries. outputDigest binds block.chainid, so
 // one signature only validates on the chain it was signed for.
 func SignReceiveVaultOutput(
-	shieldedPrivateKey string,
+	ctx context.Context,
+	userKeys *cryptokeys.UserKeys,
 	record types.ReceiveVaultRecord,
 	encryptedOutput []byte,
 	chainID int,
@@ -414,6 +419,14 @@ func SignReceiveVaultOutput(
 	factoryAddress := GetReceiveVaultFactoryAddress(chainID)
 	if factoryAddress == "" {
 		return "", fmt.Errorf("receive vault: no factory on chain %d", chainID)
+	}
+	_, isLegacy, err := ResolveReceiveVaultParams(ctx, userKeys, record, chainID)
+	if err != nil {
+		return "", err
+	}
+	ownerKey, err := receiveVaultOwnerKey(userKeys, isLegacy)
+	if err != nil {
+		return "", err
 	}
 
 	if constants.IsSolanaLike(chainID) {
@@ -425,7 +438,7 @@ func SignReceiveVaultOutput(
 		if err != nil {
 			return "", err
 		}
-		owner := GetReceiveVaultSolanaOwner(shieldedPrivateKey, TermsFromReceiveVaultRecord(record))
+		owner := GetReceiveVaultSolanaOwner(ownerKey, TermsFromReceiveVaultRecord(record))
 		return SignSolanaReceiveVaultDigest(owner, digest), nil
 	}
 
@@ -433,7 +446,7 @@ func SignReceiveVaultOutput(
 	if err != nil {
 		return "", err
 	}
-	wallet, err := GetReceiveVaultRecoveryWallet(shieldedPrivateKey, TermsFromReceiveVaultRecord(record))
+	wallet, err := GetReceiveVaultRecoveryWallet(ownerKey, TermsFromReceiveVaultRecord(record))
 	if err != nil {
 		return "", err
 	}
@@ -471,7 +484,8 @@ func GetReceiveVaultRecoveryDigest(
 }
 
 func SignReceiveVaultRecovery(
-	shieldedPrivateKey string,
+	ctx context.Context,
+	userKeys *cryptokeys.UserKeys,
 	record types.ReceiveVaultRecord,
 	token, to string,
 	deadline *big.Int,
@@ -480,6 +494,14 @@ func SignReceiveVaultRecovery(
 	factoryAddress := GetReceiveVaultFactoryAddress(chainID)
 	if factoryAddress == "" {
 		return "", fmt.Errorf("receive vault: no factory on chain %d", chainID)
+	}
+	_, isLegacy, err := ResolveReceiveVaultParams(ctx, userKeys, record, chainID)
+	if err != nil {
+		return "", err
+	}
+	ownerKey, err := receiveVaultOwnerKey(userKeys, isLegacy)
+	if err != nil {
+		return "", err
 	}
 
 	if constants.IsSolanaLike(chainID) {
@@ -491,7 +513,7 @@ func SignReceiveVaultRecovery(
 		if err != nil {
 			return "", err
 		}
-		owner := GetReceiveVaultSolanaOwner(shieldedPrivateKey, TermsFromReceiveVaultRecord(record))
+		owner := GetReceiveVaultSolanaOwner(ownerKey, TermsFromReceiveVaultRecord(record))
 		return SignSolanaReceiveVaultDigest(owner, digest), nil
 	}
 
@@ -499,7 +521,7 @@ func SignReceiveVaultRecovery(
 	if err != nil {
 		return "", err
 	}
-	wallet, err := GetReceiveVaultRecoveryWallet(shieldedPrivateKey, TermsFromReceiveVaultRecord(record))
+	wallet, err := GetReceiveVaultRecoveryWallet(ownerKey, TermsFromReceiveVaultRecord(record))
 	if err != nil {
 		return "", err
 	}
@@ -516,10 +538,19 @@ func SignReceiveVaultRecovery(
 	return "0x" + common.Bytes2Hex(sig), nil
 }
 
-func GetReceiveVaultRecoveryAddress(shieldedPrivateKey string, terms types.ReceiveVaultTerms) (string, error) {
-	wallet, err := GetReceiveVaultRecoveryWallet(shieldedPrivateKey, terms)
+func GetReceiveVaultRecoveryAddress(auxSpendKey string, terms types.ReceiveVaultTerms) (string, error) {
+	wallet, err := GetReceiveVaultRecoveryWallet(auxSpendKey, terms)
 	if err != nil {
 		return "", err
 	}
 	return gethcrypto.PubkeyToAddress(wallet.PublicKey).Hex(), nil
+}
+
+// receiveVaultOwnerKey picks the secret the vault's owner signer was seeded with: the aux spend key
+// for current vaults, the nk for ones created under the old scheme.
+func receiveVaultOwnerKey(userKeys *cryptokeys.UserKeys, isLegacy bool) (string, error) {
+	if isLegacy {
+		return userKeys.GetShieldedPrivateKey()
+	}
+	return userKeys.GetAuxSpendKey()
 }

@@ -6,6 +6,7 @@ require (
 	filippo.io/edwards25519 v1.2.0
 	github.com/consensys/gnark-crypto v0.18.1
 	github.com/ethereum/go-ethereum v1.17.3
+	github.com/fbsobreira/gotron-sdk v0.26.0
 	github.com/gagliardetto/binary v0.8.0
 	github.com/gagliardetto/solana-go v1.21.0
 	github.com/holiman/uint256 v1.3.2
@@ -13,6 +14,7 @@ require (
 	github.com/mr-tron/base58 v1.3.0
 	golang.org/x/crypto v0.53.0
 	golang.org/x/sync v0.21.0
+	google.golang.org/protobuf v1.36.11
 )
 
 require (
@@ -23,7 +25,6 @@ require (
 	github.com/bits-and-blooms/bitset v1.20.0 // indirect
 	github.com/blendle/zapdriver v1.3.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/cpuguy83/go-md2man/v2 v2.0.6 // indirect
 	github.com/crate-crypto/go-eth-kzg v1.5.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dchest/blake512 v1.0.0 // indirect

@@ -77,6 +77,10 @@ func (c *WalletClient) TriggerSmartContract(ctx context.Context, owner, contract
 	if resp.Transaction.RawDataHex == "" {
 		return nil, fmt.Errorf("tron triggersmartcontract returned empty transaction")
 	}
+
+	if err := txCheckWithArgs(&resp.Transaction, owner, contract, data, callValueSun, feeLimitSun); err != nil {
+		return nil, fmt.Errorf("tron triggersmartcontract: %w", err)
+	}
 	return &resp.Transaction, nil
 }
 

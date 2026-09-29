@@ -15,7 +15,6 @@ const (
 
 	snapshotServerEndpoint = "/snapshot-server"
 	serverEndpoint         = "/server"
-	relayerEndpoint        = "/relayer"
 	dataServerEndpoint     = "/data-server"
 
 	productionEnclaveURL = "https://enclave-server.hinkal.io"
@@ -33,7 +32,6 @@ func GetBackEndURL() string { return baseURL() }
 
 func GetSnapshotServerURL() string { return baseURL() + snapshotServerEndpoint }
 func GetServerURL() string         { return baseURL() + serverEndpoint }
-func GetRelayerURL() string        { return baseURL() + relayerEndpoint }
 func GetDataServerURL() string     { return baseURL() + dataServerEndpoint }
 
 func GetEnclaveURL() string {

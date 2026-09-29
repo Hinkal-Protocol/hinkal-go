@@ -250,8 +250,9 @@ func PrepareStuckWithdrawEnclaveCall(ctx context.Context, uk *cryptokeys.UserKey
 	if err := assertPrepareStuckWithdrawEchoMatches(payload, resp.Request); err != nil {
 		return nil, err
 	}
+	spentNullifiers := map[string]struct{}{}
 	for _, job := range resp.Jobs {
-		if err := verifyStuckWithdrawJobSignedMessageHash(params.ChainID, hinkalAddress, params.Erc20Address, params.ExternalAddress, params.FeeStructure, nullifyingKey, payload.SpendingPublicKey, job); err != nil {
+		if err := verifyStuckWithdrawJobSignedMessageHash(params.ChainID, hinkalAddress, params.Erc20Address, params.ExternalAddress, params.FeeStructure, nullifyingKey, payload.SpendingPublicKey, job, spentNullifiers); err != nil {
 			return nil, err
 		}
 	}

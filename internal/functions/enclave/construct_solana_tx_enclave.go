@@ -254,6 +254,7 @@ func PrepareSolanaStuckWithdrawEnclaveCall(
 	if err := assertPrepareSolanaStuckWithdrawEchoMatches(payload, resp.Request); err != nil {
 		return nil, err
 	}
+	spentNullifiers := map[string]struct{}{}
 	for _, job := range resp.Jobs {
 		nullifierCount := 0
 		for _, amount := range job.InAmounts[0] {
@@ -269,7 +270,7 @@ func PrepareSolanaStuckWithdrawEnclaveCall(
 		if !ok {
 			return nil, fmt.Errorf("enclave: no feeStructure supplied for nullifierCount %d", nullifierCount)
 		}
-		if err := verifySolanaStuckWithdrawJobSignedMessageHash(params.MintAddress, params.Recipient, feeStructure, nullifyingKey, payload.SpendingPublicKey, job); err != nil {
+		if err := verifySolanaStuckWithdrawJobSignedMessageHash(params.MintAddress, params.Recipient, feeStructure, nullifyingKey, payload.SpendingPublicKey, job, spentNullifiers); err != nil {
 			return nil, err
 		}
 	}

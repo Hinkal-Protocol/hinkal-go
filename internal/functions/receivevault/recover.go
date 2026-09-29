@@ -78,17 +78,14 @@ func HinkalReceiveVaultRecover(
 		return types.TransactionRequest{}, "", errors.New("receive vault: network mismatch")
 	}
 
-	shieldedPrivateKey, err := hinkal.GetUserKeys().GetShieldedPrivateKey()
-	if err != nil {
-		return types.TransactionRequest{}, "", err
-	}
-	params, err := GetReceiveVaultParams(hinkal.GetUserKeys(), TermsFromReceiveVaultRecord(record))
+	userKeys := hinkal.GetUserKeys()
+	params, _, err := ResolveReceiveVaultParams(ctx, userKeys, record, chainID)
 	if err != nil {
 		return types.TransactionRequest{}, "", err
 	}
 
 	deadline := big.NewInt(utils.GetCurrentTimeInSeconds() + constants.ReceiveVaultRecoveryTTLSeconds)
-	signature, err := SignReceiveVaultRecovery(shieldedPrivateKey, record, token, to, deadline, chainID)
+	signature, err := SignReceiveVaultRecovery(ctx, userKeys, record, token, to, deadline, chainID)
 	if err != nil {
 		return types.TransactionRequest{}, "", err
 	}

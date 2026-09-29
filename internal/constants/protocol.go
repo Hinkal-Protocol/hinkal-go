@@ -6,8 +6,10 @@ const (
 	ZeroAddress         = "0x0000000000000000000000000000000000000000"
 	SolanaNativeAddress = "11111111111111111111111111111111"
 
-	// ArcTestnetUSDCAddress is the address Arc testnet's native gas token is represented as, to
-	// avoid it showing up as a second, duplicate entry next to the "real" USDC at zeroAddress.
+	// ArcMainnetUSDCAddress and ArcTestnetUSDCAddress are the addresses Arc's native gas token is
+	// represented as, to avoid it showing up as a second, duplicate entry next to the "real" USDC
+	// at zeroAddress.
+	ArcMainnetUSDCAddress = "0x3600000000000000000000000000000000000000"
 	ArcTestnetUSDCAddress = "0x3600000000000000000000000000000000000000"
 
 	// TronDefaultFeeLimitSun is the default fee limit (in SUN) for Tron contract calls.
@@ -27,8 +29,6 @@ const (
 	ReceiveVaultSettleRequestTTLSeconds = 5 * 60
 	// ReceiveVaultRecoveryTTLSeconds bounds a recovery signature handed to the factory.
 	ReceiveVaultRecoveryTTLSeconds = 15 * 60
-	// ReceiveVaultVariableRate is the settle fee rate, in basis points.
-	ReceiveVaultVariableRate int64 = 25
 )
 
 func IsNativePlaceholderAddress(address string, chainID ...int) bool {

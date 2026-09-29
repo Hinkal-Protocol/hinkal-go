@@ -147,6 +147,7 @@ func hinkalBridgeBatchPrepare(
 	ethereumAddress string,
 	hashedEthereumAddress string,
 	pendingLeaves []string,
+	txCompletionTime *int,
 ) ([]web3.TransactCallRelayerBatchItem, error) {
 	if len(recipients) == 0 {
 		return nil, errDepositAndBridgeNoRecipients
@@ -255,7 +256,7 @@ func hinkalBridgeBatchPrepare(
 						if err != nil {
 							return err
 						}
-						encoded, err := privatewallet.EncodeEmporiumMetadata(chainID, contractData.EmporiumAddress, recipient.TemporarySubAccount.PrivateKey, ops, emporiumMessage, signerAddress, feeStructure.FlatFee)
+						encoded, err := privatewallet.EncodeEmporiumMetadata(chainID, contractData.EmporiumAddress, recipient.TemporarySubAccount.PrivateKey, ops, emporiumMessage, signerAddress, feeStructure.FlatFee, txCompletionTime)
 						if err != nil {
 							return err
 						}
@@ -423,7 +424,7 @@ func HinkalDepositAndBridge(
 		var err error
 		batchTransactions, err = hinkalBridgeBatchPrepare(
 			ctx, hinkal, chainID, erc20Token, recipientBridgeUtxos, feeStructure,
-			ethereumAddress, hashedEthereumAddress, preparedDeposit.PendingLeaves,
+			ethereumAddress, hashedEthereumAddress, preparedDeposit.PendingLeaves, txCompletionTime,
 		)
 		return err
 	})

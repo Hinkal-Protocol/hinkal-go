@@ -85,11 +85,10 @@ func positiveStuckUtxosForToken(
 	ethAddress string,
 ) ([]*utxo.Utxo, error) {
 	inputUtxosPerToken, err := balance.GetInputUtxoAndBalancePerToken(ctx, balance.InputUtxoParams{
-		Hinkal:                hinkal,
-		ChainID:               chainID,
-		EthAddress:            ethAddress,
-		AllowRemoteDecryption: hinkal.GenerateProofRemotely(),
-		UseBlockedUtxos:       true,
+		Hinkal:          hinkal,
+		ChainID:         chainID,
+		EthAddress:      ethAddress,
+		UseBlockedUtxos: true,
 	}, 2, false, nil, nil)
 	if err != nil {
 		return nil, err

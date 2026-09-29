@@ -36,7 +36,7 @@ type SwapPair struct {
 }
 
 type AdminDataType struct {
-	HashedOwner         string               `json:"hashedOwner"`
+	HashedOwner         string               `json:"hashedOwner,omitempty"`
 	ChainID             int                  `json:"chainId"`
 	Timestamp           int64                `json:"timestamp"`
 	Action              AdminTransactionType `json:"action"`

@@ -15,6 +15,7 @@ import (
 
 	"github.com/Hinkal-Protocol/hinkal-go/internal/api"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
+	"github.com/Hinkal-Protocol/hinkal-go/internal/types"
 )
 
 const (
@@ -27,8 +28,12 @@ type handshakeResponse struct {
 }
 
 func makeHandshakeForPublicKey(ctx context.Context) (string, error) {
-	var resp handshakeResponse
-	if err := api.Get(ctx, constants.GetEnclaveURL()+constants.EnclaveConfig.Handshake, &resp); err != nil {
+	var signed types.SignedEnclaveResponse
+	if err := api.Get(ctx, constants.GetEnclaveURL()+constants.EnclaveConfig.Handshake, &signed); err != nil {
+		return "", fmt.Errorf("enclave handshake: %w", err)
+	}
+	resp, err := verifySignedEnclaveResponse[handshakeResponse](signed.Data, signed.Signature)
+	if err != nil {
 		return "", fmt.Errorf("enclave handshake: %w", err)
 	}
 	if resp.PublicKey == "" {

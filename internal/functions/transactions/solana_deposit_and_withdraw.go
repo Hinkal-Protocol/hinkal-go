@@ -28,20 +28,26 @@ func resolveSolanaDepositAndWithdrawFeeStructure(
 	feeStructureOverride *types.FeeStructure,
 	solanaTransactionParams *api.SolanaGasEstimateParams,
 ) (types.FeeStructure, error) {
+	var feeStructure types.FeeStructure
 	if feeStructureOverride != nil {
-		return normalizeFeeStructure(*feeStructureOverride), nil
+		feeStructure = *feeStructureOverride
+	} else {
+		var err error
+		feeStructure, err = pretransaction.GetFeeStructure(
+			ctx,
+			chainID,
+			mintAddress,
+			[]string{mintAddress},
+			types.ExternalActionTransact,
+			nil,
+			constants.PaySendVariableRate(),
+			solanaTransactionParams,
+		)
+		if err != nil {
+			return types.FeeStructure{}, err
+		}
 	}
-	feeStructure, err := pretransaction.GetFeeStructure(
-		ctx,
-		chainID,
-		mintAddress,
-		[]string{mintAddress},
-		types.ExternalActionTransact,
-		nil,
-		constants.PaySendVariableRate(),
-		solanaTransactionParams,
-	)
-	if err != nil {
+	if err := fees.AssertSolanaFeeTokenMatchesMint(feeStructure, mintAddress); err != nil {
 		return types.FeeStructure{}, err
 	}
 	return normalizeFeeStructure(feeStructure), nil
@@ -70,6 +76,9 @@ func solanaWithdrawBatchPrepare(
 		return nil, errUserDepositedUtxosEmpty
 	}
 	mintAddress := token.Erc20TokenAddress
+	if err := fees.AssertSolanaFeeTokenMatchesMint(feeStructure, mintAddress); err != nil {
+		return nil, err
+	}
 	withdrawTimeStamp := new(big.Int).SetInt64(utils.GetCurrentTimeInSeconds()).String()
 	transactions := make([]api.SolanaTransactionBody, 0, len(userDepositedUtxos))
 

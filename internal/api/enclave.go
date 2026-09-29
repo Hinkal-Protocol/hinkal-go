@@ -47,25 +47,6 @@ func GetBalancesEnclaveCall(
 	return raw, nil
 }
 
-type DecryptUtxoEnclaveResponse struct {
-	Utxos            []types.UtxoParams               `json:"utxos"`
-	EncryptedOutputs []*types.EncryptedOutputWithSign `json:"encryptedOutputs"`
-	LastOutput       string                           `json:"lastOutput"`
-}
-
-func DecryptUtxoEnclaveCall(ctx context.Context, chainID int, keyCiphertext, inputCiphertext string) (*DecryptUtxoEnclaveResponse, error) {
-	body := map[string]any{
-		"chainId": chainID,
-		"input":   inputCiphertext,
-		"key":     keyCiphertext,
-	}
-	var resp DecryptUtxoEnclaveResponse
-	if err := Post(ctx, constants.GetEnclaveURL()+constants.EnclaveConfig.DecryptUtxos, body, &resp); err != nil {
-		return nil, err
-	}
-	return &resp, nil
-}
-
 type StoreClaimableKeyResponse struct {
 	Status string `json:"status"`
 }
@@ -105,7 +86,9 @@ func GetUtxosEnclaveCall(
 }
 
 type StoreAndGetSignatureResponse struct {
-	Signature string `json:"signature"`
+	Signature        string `json:"signature"`
+	Data             string `json:"data"`
+	EnclaveSignature string `json:"enclaveSignature"`
 }
 
 func StoreAndGetSignatureEnclaveCall(

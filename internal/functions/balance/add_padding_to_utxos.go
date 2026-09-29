@@ -86,11 +86,10 @@ func AddPaddingToUtxos(
 	}
 
 	inputUtxosPerToken, err := GetInputUtxoAndBalancePerToken(ctx, InputUtxoParams{
-		Hinkal:                hinkal,
-		ChainID:               chainID,
-		EthAddress:            ethAddress,
-		AllowRemoteDecryption: hinkal.GenerateProofRemotely(),
-		UseBlockedUtxos:       useBlockedUtxos,
+		Hinkal:          hinkal,
+		ChainID:         chainID,
+		EthAddress:      ethAddress,
+		UseBlockedUtxos: useBlockedUtxos,
 	}, 2, false, nil, erc20Addresses)
 	if err != nil {
 		return nil, err
