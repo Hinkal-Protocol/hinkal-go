@@ -49,12 +49,14 @@ func emitSponsoredAdminData(
 	tokenAddress string,
 	amount *big.Int,
 	senderAddress string,
+	variableRate *big.Int,
+	txHash string,
 ) {
-	adminData := pretransaction.ConstructAdminData(action, chainID, []string{tokenAddress}, []*big.Int{amount}, senderAddress, nil)
+	adminData := pretransaction.ConstructAdminData(action, chainID, []string{tokenAddress}, []*big.Int{amount}, senderAddress, nil, variableRate)
 	if adminData == nil {
 		return
 	}
-	if err := api.EmitTxPublicData(ctx, adminData); err != nil {
+	if err := api.EmitTxPublicData(ctx, adminData, txHash); err != nil {
 		log.Printf("emit tx public data error: %v", err)
 	}
 }
@@ -94,7 +96,7 @@ func HinkalSolanaSponsoredShield(
 	}
 
 	shieldedAmount := new(big.Int).Sub(landedAmount, feeWei)
-	emitSponsoredAdminData(ctx, action, chainID, token.Erc20TokenAddress, shieldedAmount, senderAddress)
+	emitSponsoredAdminData(ctx, action, chainID, token.Erc20TokenAddress, shieldedAmount, senderAddress, variableRate, txHash)
 
 	return txHash, shieldedAmount, nil
 }
@@ -126,7 +128,7 @@ func HinkalSolanaSponsoredProxySend(
 		return "", err
 	}
 
-	emitSponsoredAdminData(ctx, action, chainID, token.Erc20TokenAddress, landedAmount, senderAddress)
+	emitSponsoredAdminData(ctx, action, chainID, token.Erc20TokenAddress, landedAmount, senderAddress, nil, txHash)
 
 	return txHash, nil
 }

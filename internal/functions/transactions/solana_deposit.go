@@ -476,6 +476,7 @@ func HinkalSolanaProoflessDepositWithPublicFee(
 	recipientEncryptionKeys []string,
 	feeAmount *big.Int,
 	returnTxData bool,
+	action types.AdminTransactionType,
 ) (string, error) {
 	if err := validateSolanaDepositArgs(amounts, structures); err != nil {
 		return "", err
@@ -548,7 +549,7 @@ func HinkalSolanaProoflessDepositWithPublicFee(
 	if err != nil {
 		return "", err
 	}
-	emitDepositAdminData(ctx, hinkal, types.AdminShield, chainID, []types.ERC20Token{token}, amounts)
+	emitDepositAdminData(ctx, hinkal, action, chainID, []types.ERC20Token{token}, amounts, nil, signature)
 	return signature, nil
 }
 
@@ -560,6 +561,7 @@ func HinkalSolanaProoflessDeposit(
 	stealthAddressStructuresOverride []types.StealthAddressStructure,
 	recipientEncryptionKeysOverride []string,
 	returnTxData bool,
+	action types.AdminTransactionType,
 ) (string, error) {
 	chainID, err := pretransaction.ValidateAndGetChainID(erc20Tokens)
 	if err != nil {
@@ -603,7 +605,7 @@ func HinkalSolanaProoflessDeposit(
 		return "", err
 	}
 	if !returnTxData {
-		emitDepositAdminData(ctx, hinkal, types.AdminShield, chainID, erc20Tokens, amountChanges)
+		emitDepositAdminData(ctx, hinkal, action, chainID, erc20Tokens, amountChanges, nil, result)
 	}
 	return result, nil
 }
@@ -614,6 +616,7 @@ func HinkalSolanaDeposit(
 	amount *big.Int,
 	token types.ERC20Token,
 	returnTxData bool,
+	action types.AdminTransactionType,
 ) (string, error) {
 	userKeys := hinkal.GetUserKeys()
 	shieldedPrivateKey, err := userKeys.GetShieldedPrivateKey()
@@ -641,7 +644,14 @@ func HinkalSolanaDeposit(
 	if err != nil {
 		return "", err
 	}
-	return SubmitSolanaProoflessDeposit(ctx, hinkal, token, []*big.Int{amount}, []types.StealthAddressStructure{structure}, encryptionKeys, returnTxData)
+	result, err := SubmitSolanaProoflessDeposit(ctx, hinkal, token, []*big.Int{amount}, []types.StealthAddressStructure{structure}, encryptionKeys, returnTxData)
+	if err != nil {
+		return "", err
+	}
+	if !returnTxData {
+		emitDepositAdminData(ctx, hinkal, action, token.ChainID, []types.ERC20Token{token}, []*big.Int{amount}, nil, result)
+	}
+	return result, nil
 }
 
 func HinkalSolanaDepositForOther(
@@ -652,6 +662,7 @@ func HinkalSolanaDepositForOther(
 	recipientInfo string,
 	returnTxData bool,
 	variableRate *big.Int,
+	action types.AdminTransactionType,
 ) (string, error) {
 	if !pretransaction.IsValidPrivateAddress(recipientInfo) {
 		return "", errorhandling.ErrRecipientFormatIncorrect
@@ -671,14 +682,14 @@ func HinkalSolanaDepositForOther(
 		feeAmount.Div(feeAmount, big.NewInt(constants.BpsDenominator))
 	}
 
-	result, err := HinkalSolanaProoflessDepositWithPublicFee(ctx, hinkal, token, []*big.Int{amount}, []types.StealthAddressStructure{structure}, []string{encryptionKey}, feeAmount, returnTxData)
+	result, err := HinkalSolanaProoflessDepositWithPublicFee(ctx, hinkal, token, []*big.Int{amount}, []types.StealthAddressStructure{structure}, []string{encryptionKey}, feeAmount, returnTxData, "")
 	if err != nil {
 		return "", err
 	}
 	if !returnTxData {
 		chainID, chainErr := pretransaction.ValidateAndGetChainID([]types.ERC20Token{token})
 		if chainErr == nil {
-			emitDepositAdminData(ctx, hinkal, types.AdminShield, chainID, []types.ERC20Token{token}, []*big.Int{amount})
+			emitDepositAdminData(ctx, hinkal, action, chainID, []types.ERC20Token{token}, []*big.Int{amount}, variableRate, result)
 		}
 	}
 	return result, nil

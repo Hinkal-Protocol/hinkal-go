@@ -27,7 +27,7 @@ func resolveTransferFeeStructure(
 	recipientAmount *big.Int,
 	feeStructureOverride *types.FeeStructure,
 	solanaTransactionParams *api.SolanaGasEstimateParams,
-) (types.FeeStructure, error) {
+) (types.FeeStructure, *big.Int, error) {
 	var rawFeeStructure types.FeeStructure
 	if feeStructureOverride != nil {
 		rawFeeStructure = *feeStructureOverride
@@ -44,14 +44,15 @@ func resolveTransferFeeStructure(
 			solanaTransactionParams,
 		)
 		if err != nil {
-			return types.FeeStructure{}, err
+			return types.FeeStructure{}, nil, err
 		}
 	}
 	rawFeeStructure = normalizeFeeStructure(rawFeeStructure)
 	if rawFeeStructure.VariableRate.Sign() == 0 {
 		rawFeeStructure.VariableRate = constants.HinkalPrivateSendVariableRate()
 	}
-	return fees.CalculateModifiedFeeStructure(ctx, chainID, sentToken, recipientAmount, rawFeeStructure), nil
+
+	return fees.CalculateModifiedFeeStructure(ctx, chainID, sentToken, recipientAmount, rawFeeStructure), rawFeeStructure.VariableRate, nil
 }
 
 func transferRecipientAmounts(erc20Addresses []string, recipientAmount *big.Int) []*big.Int {
@@ -74,6 +75,7 @@ func HinkalTransfer(
 	recipientAddress string,
 	feeToken string,
 	feeStructureOverride *types.FeeStructure,
+	action types.AdminTransactionType,
 ) (string, error) {
 	chainID, err := pretransaction.ValidateAndGetChainID(erc20Tokens)
 	if err != nil {
@@ -96,6 +98,7 @@ func HinkalTransfer(
 	var amountChanges []*big.Int
 	var recipientAmount *big.Int
 	var feeStructure types.FeeStructure
+	var variableRate *big.Int
 	group, groupCtx := errgroup.WithContext(ctx)
 	group.Go(func() (err error) {
 		ethereumAddress, err = hinkal.GetEthereumAddressByChain(groupCtx, chainID)
@@ -104,11 +107,12 @@ func HinkalTransfer(
 	group.Go(func() error {
 		amountChanges = pretransaction.ModifyVolatileTokenAmountChanges(groupCtx, chainID, erc20Tokens, copyBigInts(amountChangesBase), "")
 		recipientAmount = new(big.Int).Neg(amountChanges[0])
-		resolved, err := resolveTransferFeeStructure(groupCtx, chainID, feeToken, erc20Addresses, sentToken, recipientAmount, feeStructureOverride, nil)
+		resolved, rate, err := resolveTransferFeeStructure(groupCtx, chainID, feeToken, erc20Addresses, sentToken, recipientAmount, feeStructureOverride, nil)
 		if err != nil {
 			return err
 		}
 		feeStructure = resolved
+		variableRate = rate
 		return nil
 	})
 	if err := group.Wait(); err != nil {
@@ -118,7 +122,7 @@ func HinkalTransfer(
 		return "", err
 	}
 
-	adminData := pretransaction.ConstructAdminData(types.AdminPrivateToPrivateSend, chainID, erc20Addresses, amountChanges, ethereumAddress, nil)
+	adminData := pretransaction.ConstructAdminData(action, chainID, erc20Addresses, amountChanges, ethereumAddress, nil, variableRate)
 
 	result, err := HinkalTransact(ctx, hinkal, HinkalTransactParams{
 		ChainID:          chainID,

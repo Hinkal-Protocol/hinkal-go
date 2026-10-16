@@ -17,10 +17,22 @@ type TemporarySubAccount struct {
 }
 
 type BridgeRecipient struct {
-	RecipientAddress    string              `json:"recipientAddress"`
-	BridgeAmount        *big.Int            `json:"bridgeAmount"`
-	Quote               BridgeQuote         `json:"quote"`
-	TemporarySubAccount TemporarySubAccount `json:"temporarySubAccount"`
+	RecipientAddress        string              `json:"recipientAddress"`
+	BridgeAmount            *big.Int            `json:"bridgeAmount"`
+	Quote                   BridgeQuote         `json:"quote"`
+	TemporarySubAccount     TemporarySubAccount `json:"temporarySubAccount"`
+	DestinationChainID      *int                `json:"destinationChainId,omitempty"`
+	DestinationTokenAddress string              `json:"destinationTokenAddress,omitempty"`
+}
+
+type DepositAndBridgeQuote struct {
+	SourceChainID           int               `json:"sourceChainId"`
+	SourceTokenAddress      string            `json:"sourceTokenAddress"`
+	DestinationChainID      int               `json:"destinationChainId"`
+	DestinationTokenAddress string            `json:"destinationTokenAddress"`
+	ExpectedAmounts         []*big.Int        `json:"expectedAmounts"`          // destination amount per recipient, same order as the quoted recipients
+	LifiRecipients          []BridgeRecipient `json:"lifiRecipients,omitempty"` // EVM sources
+	NearLegs                []NearBridgeLeg   `json:"nearLegs,omitempty"`       // Solana/Tron sources
 }
 
 type AuthorizationData struct {

@@ -36,11 +36,12 @@ type SwapPair struct {
 }
 
 type AdminDataType struct {
-	HashedOwner         string               `json:"hashedOwner,omitempty"`
-	ChainID             int                  `json:"chainId"`
-	Timestamp           int64                `json:"timestamp"`
-	Action              AdminTransactionType `json:"action"`
-	Erc20TokenAddresses []string             `json:"erc20TokenAddresses"`
-	Erc20TokenAmount    []string             `json:"erc20TokenAmount"`
-	SwapPair            *SwapPair            `json:"swapPair,omitempty"`
+	HashedOwner          string               `json:"hashedOwner,omitempty"`
+	ChainID              int                  `json:"chainId"`
+	Timestamp            int64                `json:"timestamp"`
+	Action               AdminTransactionType `json:"action"`
+	Erc20TokenAddresses  []string             `json:"erc20TokenAddresses"`
+	Erc20TokenAmount     []string             `json:"erc20TokenAmount"`
+	SwapPair             *SwapPair            `json:"swapPair,omitempty"`
+	VariableRateOverride string               `json:"variableRateOverride,omitempty"`
 }

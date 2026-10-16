@@ -11,6 +11,7 @@ type TemporaryWalletNonceEntry struct {
 	Nonce               int                                      `json:"nonce"`
 	RecoveryDestination types.TemporaryWalletRecoveryDestination `json:"recoveryDestination"`
 	IsLegacy            bool                                     `json:"isLegacy"`
+	CreatedAt           string                                   `json:"createdAt,omitempty"`
 }
 
 type TemporaryWalletNoncesResponse struct {

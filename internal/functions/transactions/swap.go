@@ -31,7 +31,11 @@ func HinkalSwap(
 	feeToken string,
 	feeStructureOverride *types.FeeStructure,
 	slippagePercentage float64,
+	action types.AdminTransactionType,
 ) (string, error) {
+	if slippagePercentage == 0 {
+		slippagePercentage = constants.DefaultBridgingSlippage
+	}
 	chainID, err := pretransaction.ValidateAndGetChainID(erc20Tokens)
 	if err != nil {
 		return "", err
@@ -71,7 +75,7 @@ func HinkalSwap(
 		return "", err
 	}
 
-	adminData := pretransaction.ConstructAdminData(types.AdminPrivateSwap, chainID, erc20Addresses, deltaAmounts, ethereumAddress, erc20Tokens)
+	adminData := pretransaction.ConstructAdminData(action, chainID, erc20Addresses, deltaAmounts, ethereumAddress, erc20Tokens, feeStructure.VariableRate)
 
 	slippageValues := snarkjs.BuildSwapSlippageValues(deltaAmounts, slippagePercentage)
 

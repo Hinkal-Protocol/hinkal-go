@@ -110,8 +110,6 @@ func TransactCallDirect(ctx context.Context, adapter types.IProviderAdapter, cha
 		}
 	}
 
-	time.Sleep(time.Second) // because public rpc link gives 429
-
 	txResp, err := adapter.SendTransaction(ctx, txReq)
 	if err != nil {
 		return types.TransactionRequest{}, "", err

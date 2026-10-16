@@ -59,6 +59,7 @@ func HinkalSolanaTransfer(
 	amountChangesBase []*big.Int,
 	recipientAddress string,
 	feeStructureOverride *types.FeeStructure,
+	action types.AdminTransactionType,
 ) (string, error) {
 	chainID, err := pretransaction.ValidateAndGetChainID(erc20Tokens)
 	if err != nil {
@@ -105,7 +106,7 @@ func HinkalSolanaTransfer(
 	if err != nil {
 		return "", err
 	}
-	adminData := pretransaction.ConstructAdminData(types.AdminPrivateToPrivateSend, chainID, mintAddresses, amountChanges, ethereumAddress, nil)
+	adminData := pretransaction.ConstructAdminData(action, chainID, mintAddresses, amountChanges, ethereumAddress, nil, feeStructure.VariableRate)
 
 	result, err := SolanaTransact(ctx, hinkal, HinkalSolanaTransactParams{
 		ChainID:       chainID,

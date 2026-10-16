@@ -3,7 +3,15 @@ package constants
 const (
 	NearBridgeQuoteDeadlineBufferMS int64 = 20 * 60 * 1000
 	NearBridgeSlippageBPS                 = 100
+	NearRPCURL                            = "https://rpc.mainnet.fastnear.com"
+	NearRPCMaxRetryAttempts               = 12
+	NearRPCRetryDelayMS                   = 500
+	NearRPCRetryBackoff                   = 1.5
+	NearIntentsContractID                 = "intents.near"
+	NearIntentsReferral                   = "hinkal"
 )
+
+var NearRPCRetryStatuses = []int{500, 503, 408}
 
 var NearIntentsBlockchainByChainID = map[int]string{
 	ChainIDs.SolanaMainnet: "sol",

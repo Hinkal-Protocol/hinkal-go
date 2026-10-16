@@ -176,6 +176,7 @@ func BuildReceiveVaultRecord(
 	return types.ReceiveVaultRecord{
 		Index:        terms.Index,
 		Network:      terms.Network,
+		Expiry:       terms.Expiry,
 		Version:      terms.Version,
 		VaultAddress: vaultAddress,
 	}, nil

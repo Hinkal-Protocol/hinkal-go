@@ -80,12 +80,16 @@ func resolveDepositAndBridgeFeeStructure(
 		return types.FeeStructure{}, err
 	}
 	firstRecipient := recipients[0]
+	sampleFundAmount := firstRecipient.BridgeAmount
+	if strings.EqualFold(tokenAddress, constants.ZeroAddress) {
+		sampleFundAmount = new(big.Int).Add(firstRecipient.BridgeAmount, nativeFeeValue(firstRecipient.Quote))
+	}
 	sampleOps, err := privatewallet.CreateLifiBridgeOps(
 		chainID,
 		firstRecipient.TemporarySubAccount.EthAddress,
 		lifiRouterAddress,
 		tokenAddress,
-		firstRecipient.BridgeAmount,
+		sampleFundAmount,
 		firstRecipient.BridgeAmount,
 		firstRecipient.Quote,
 	)
@@ -148,6 +152,7 @@ func hinkalBridgeBatchPrepare(
 	hashedEthereumAddress string,
 	pendingLeaves []string,
 	txCompletionTime *int,
+	action types.AdminTransactionType,
 ) ([]web3.TransactCallRelayerBatchItem, error) {
 	if len(recipients) == 0 {
 		return nil, errDepositAndBridgeNoRecipients
@@ -298,12 +303,13 @@ func hinkalBridgeBatchPrepare(
 				}
 
 				adminData := pretransaction.ConstructAdminData(
-					types.AdminPublicToPublicBridgeSend,
+					action,
 					chainID,
 					[]string{tokenAddress},
 					[]*big.Int{new(big.Int).Neg(utxoToBridge.Amount)},
 					ethereumAddress,
 					nil,
+					feeStructure.VariableRate,
 				)
 
 				batchTransactions[batchIndex] = web3.TransactCallRelayerBatchItem{
@@ -336,6 +342,7 @@ func HinkalDepositAndBridge(
 	txCompletionTime *int,
 	feeStructureOverride *types.FeeStructure,
 	preEstimateGas bool,
+	action types.AdminTransactionType,
 ) (types.DepositAndSendExtendedResult, error) {
 	chainID, err := pretransaction.ValidateAndGetChainID(erc20Tokens)
 	if err != nil {
@@ -424,7 +431,7 @@ func HinkalDepositAndBridge(
 		var err error
 		batchTransactions, err = hinkalBridgeBatchPrepare(
 			ctx, hinkal, chainID, erc20Token, recipientBridgeUtxos, feeStructure,
-			ethereumAddress, hashedEthereumAddress, preparedDeposit.PendingLeaves, txCompletionTime,
+			ethereumAddress, hashedEthereumAddress, preparedDeposit.PendingLeaves, txCompletionTime, action,
 		)
 		return err
 	})

@@ -83,6 +83,15 @@ func bigIntStringsNested(values [][]*big.Int) [][]string {
 	return out
 }
 
+// nilIfEmpty: omitempty drops an empty slice from the wire, so the enclave echoes it back as nil;
+// keep the request's own copy nil too or the echo check's DeepEqual fails on []T{} vs nil.
+func nilIfEmpty[T any](values []T) []T {
+	if len(values) == 0 {
+		return nil
+	}
+	return values
+}
+
 func buildPrepareTxRequest(p types.PrepareTxParams, nullifyingKey string, spendingPublicKey [2]string) (types.PrepareTxRequestType, error) {
 	hinkalAddress, err := constants.HinkalAddress(p.ChainID)
 	if err != nil {
@@ -100,18 +109,18 @@ func buildPrepareTxRequest(p types.PrepareTxParams, nullifyingKey string, spendi
 		SkipRelayReservation:   p.SkipRelayReservation,
 		ExternalActionID:       string(p.ExternalActionID),
 		ExternalActionMetadata: p.ExternalActionMetadata,
-		OnChainCreation:        p.OnChainCreation,
-		RecipientAddress:       p.RecipientAddress,
-		RecipientAmounts:       bigIntStringsNested(p.RecipientAmounts),
-		SelfOutputAmounts:      bigIntStrings(p.SelfOutputAmounts),
-		InputCommitments:       p.InputCommitments,
+		OnChainCreation:        nilIfEmpty(p.OnChainCreation),
+		RecipientAddress:       nilIfEmpty(p.RecipientAddress),
+		RecipientAmounts:       nilIfEmpty(bigIntStringsNested(p.RecipientAmounts)),
+		SelfOutputAmounts:      nilIfEmpty(bigIntStrings(p.SelfOutputAmounts)),
+		InputCommitments:       nilIfEmpty(p.InputCommitments),
 		UseBlockedUtxos:        p.UseBlockedUtxos,
 		CreateBlockedUtxos:     p.CreateBlockedUtxos,
 		ForceEmptyUtxos:        p.ForceEmptyUtxos,
 		SkipLock:               p.SkipLock,
 		Speculative:            p.Speculative,
 		NullifyingKey:          nullifyingKey,
-		SlippageValues:         bigIntStrings(p.SlippageValues),
+		SlippageValues:         nilIfEmpty(bigIntStrings(p.SlippageValues)),
 		ReceiveVaultAddress:    p.ReceiveVaultAddress,
 		SpendingPublicKey:      spendingPublicKey,
 	}

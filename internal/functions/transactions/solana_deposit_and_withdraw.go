@@ -71,6 +71,7 @@ func solanaWithdrawBatchPrepare(
 	ethereumAddress string,
 	recipientAmounts []*big.Int,
 	pendingLeaves []string,
+	action types.AdminTransactionType,
 ) ([]api.SolanaTransactionBody, error) {
 	if len(userDepositedUtxos) == 0 {
 		return nil, errUserDepositedUtxosEmpty
@@ -117,12 +118,13 @@ func solanaWithdrawBatchPrepare(
 					accounts.Mint = mintAddress
 				}
 				adminData := pretransaction.ConstructAdminData(
-					types.AdminPublicToPublicSend,
+					action,
 					chainID,
 					[]string{mintAddress},
 					[]*big.Int{recipientAmounts[absoluteIndex]},
 					ethereumAddress,
 					nil,
+					feeStructure.VariableRate,
 				)
 
 				result, err := SolanaTransact(groupCtx, hinkal, HinkalSolanaTransactParams{
@@ -184,9 +186,10 @@ func HinkalSolanaWithdrawBatch(
 	txCompletionTime *int,
 	pendingLeaves []string,
 	dependsOnTxHash string,
+	action types.AdminTransactionType,
 ) (string, error) {
 	transactions, err := solanaWithdrawBatchPrepare(
-		ctx, hinkal, chainID, token, userDepositedUtxos, feeStructure, ethereumAddress, recipientAmounts, pendingLeaves,
+		ctx, hinkal, chainID, token, userDepositedUtxos, feeStructure, ethereumAddress, recipientAmounts, pendingLeaves, action,
 	)
 	if err != nil {
 		return "", err
@@ -204,6 +207,7 @@ func HinkalSolanaDepositAndWithdraw(
 	recipientAddresses []string,
 	txCompletionTime *int,
 	feeStructureOverride *types.FeeStructure,
+	action types.AdminTransactionType,
 ) (types.DepositAndSendExtendedResult, error) {
 	chainID, err := pretransaction.ValidateAndGetChainID(erc20Tokens)
 	if err != nil {
@@ -324,7 +328,7 @@ func HinkalSolanaDepositAndWithdraw(
 		var err error
 		batchTransactions, err = solanaWithdrawBatchPrepare(
 			ctx, hinkal, chainID, token, depositedUtxos, feeStructure,
-			rawEthereumAddress, recipientAmounts, pendingLeaves,
+			rawEthereumAddress, recipientAmounts, pendingLeaves, action,
 		)
 		return err
 	})

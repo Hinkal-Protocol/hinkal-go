@@ -141,6 +141,7 @@ func HinkalProoflessDeposit(
 	feeStructure types.ProoflessFeeStructure,
 	orderID string,
 	returnTxData bool,
+	action types.AdminTransactionType,
 ) (types.TransactionRequest, string, error) {
 	chainID, err := pretransaction.ValidateAndGetChainID(erc20Tokens)
 	if err != nil {
@@ -263,6 +264,6 @@ func HinkalProoflessDeposit(
 	if err != nil {
 		return types.TransactionRequest{}, "", err
 	}
-	emitDepositAdminData(ctx, hinkal, types.AdminShield, chainID, erc20Tokens, amountChanges)
+	emitDepositAdminData(ctx, hinkal, action, chainID, erc20Tokens, amountChanges, nil, txResp.Hash)
 	return txReq, txResp.Hash, nil
 }

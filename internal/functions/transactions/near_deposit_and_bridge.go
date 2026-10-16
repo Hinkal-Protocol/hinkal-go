@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"strings"
 	"time"
 
 	"github.com/Hinkal-Protocol/hinkal-go/internal/api"
@@ -49,10 +48,6 @@ func buildNearBridgeFeeStructure(
 	token types.ERC20Token,
 	recipient string,
 ) (types.FeeStructure, error) {
-	nullifierCount := 1
-	if strings.EqualFold(token.Erc20TokenAddress, constants.SolanaNativeAddress) {
-		nullifierCount = 0
-	}
 	return pretransaction.GetFeeStructure(
 		ctx,
 		chainID,
@@ -64,8 +59,75 @@ func buildNearBridgeFeeStructure(
 		&api.SolanaGasEstimateParams{
 			MintTo:         token.Erc20TokenAddress,
 			Recipient:      recipient,
-			NullifierCount: nullifierCount,
+			NullifierCount: 1,
 		},
+	)
+}
+
+// hinkalNearDepositAndBridgeLegs mirrors hinkalNearDepositAndBridgeLegs (hinkalNearDepositAndBridge.ts).
+func hinkalNearDepositAndBridgeLegs(
+	ctx context.Context,
+	hinkal ihinkal.HinkalInternal,
+	token types.ERC20Token,
+	legs []types.NearBridgeLeg,
+	txCompletionTime *int,
+	feeStructureOverride *types.FeeStructure,
+	action types.AdminTransactionType,
+) (types.DepositAndSendExtendedResult, error) {
+	if len(legs) == 0 {
+		return types.DepositAndSendExtendedResult{}, errNearBridgeNoRecipients
+	}
+
+	erc20Tokens := []types.ERC20Token{token}
+	chainID, err := pretransaction.ValidateAndGetChainID(erc20Tokens)
+	if err != nil {
+		return types.DepositAndSendExtendedResult{}, err
+	}
+	executionTimeMs := nearBridgeExecutionTimeMs(txCompletionTime)
+	for _, leg := range legs {
+		if err := validateNearBridgeQuoteDeadline(leg.Quote, executionTimeMs); err != nil {
+			return types.DepositAndSendExtendedResult{}, err
+		}
+	}
+
+	feeStructure := feeStructureOverride
+	if feeStructure == nil {
+		computedFeeStructure, err := buildNearBridgeFeeStructure(ctx, chainID, token, legs[0].DepositAddress)
+		if err != nil {
+			return types.DepositAndSendExtendedResult{}, err
+		}
+		feeStructure = &computedFeeStructure
+	}
+
+	amounts := make([]*big.Int, len(legs))
+	depositAddresses := make([]string, len(legs))
+	for i, leg := range legs {
+		amounts[i] = new(big.Int).Set(leg.Amount)
+		depositAddresses[i] = leg.DepositAddress
+	}
+
+	if constants.IsSolanaLike(chainID) {
+		return HinkalSolanaDepositAndWithdraw(
+			ctx,
+			hinkal,
+			erc20Tokens,
+			amounts,
+			depositAddresses,
+			txCompletionTime,
+			feeStructure,
+			action,
+		)
+	}
+	return HinkalDepositAndWithdraw(
+		ctx,
+		hinkal,
+		erc20Tokens,
+		amounts,
+		depositAddresses,
+		txCompletionTime,
+		feeStructure,
+		true,
+		action,
 	)
 }
 
@@ -78,6 +140,7 @@ func HinkalNearDepositAndBridge(
 	params types.NearBridgeParams,
 	txCompletionTime *int,
 	feeStructureOverride *types.FeeStructure,
+	action types.AdminTransactionType,
 ) (types.NearBridgeResult, error) {
 	if len(recipientAmounts) != len(recipientAddresses) {
 		return types.NearBridgeResult{}, errRecipientAmountLengthMismatch
@@ -88,101 +151,23 @@ func HinkalNearDepositAndBridge(
 	if err := validateDepositAndWithdrawArgs(erc20Tokens, recipientAmounts, recipientAddresses); err != nil {
 		return types.NearBridgeResult{}, err
 	}
-	chainID, err := pretransaction.ValidateAndGetChainID(erc20Tokens)
+	if _, err := pretransaction.ValidateAndGetChainID(erc20Tokens); err != nil {
+		return types.NearBridgeResult{}, err
+	}
+
+	legs, err := getNearBridgeLegs(ctx, hinkal, erc20Tokens[0], recipientAmounts, recipientAddresses, params, txCompletionTime)
 	if err != nil {
 		return types.NearBridgeResult{}, err
 	}
 
-	executionTimeMs := nearBridgeExecutionTimeMs(txCompletionTime)
-	deadline := nearBridgeDeadline(executionTimeMs)
-	slippageBps := constants.NearBridgeSlippageBPS
-	if params.SlippageBps != nil {
-		slippageBps = *params.SlippageBps
-	}
-	refundTo, err := hinkal.GetUserKeys().GetNearIntentsAccountID()
-	if err != nil {
-		return types.NearBridgeResult{}, err
-	}
-
-	legs := make([]types.NearBridgeLeg, len(recipientAddresses))
-	for i, destinationRecipient := range recipientAddresses {
-		amount := recipientAmounts[i]
-		quoteResp, err := api.GetNearIntentsQuote(ctx, types.NearIntentsQuoteRequest{
-			Dry:               false,
-			SwapType:          "EXACT_INPUT",
-			SlippageTolerance: slippageBps,
-			OriginAsset:       params.OriginAsset,
-			DepositType:       "ORIGIN_CHAIN",
-			DestinationAsset:  params.DestinationAsset,
-			Amount:            amount.String(),
-			Recipient:         destinationRecipient,
-			RecipientType:     "DESTINATION_CHAIN",
-			RefundTo:          refundTo,
-			RefundType:        "INTENTS",
-			Deadline:          deadline,
-		})
-		if err != nil {
-			return types.NearBridgeResult{}, err
-		}
-		if quoteResp.Quote.DepositAddress == "" {
-			return types.NearBridgeResult{}, fmt.Errorf("NEAR Intents quote returned no deposit address for recipient %s", destinationRecipient)
-		}
-		if err := validateNearBridgeQuoteDeadline(quoteResp.Quote, executionTimeMs); err != nil {
-			return types.NearBridgeResult{}, err
-		}
-		legs[i] = types.NearBridgeLeg{
-			DestinationRecipient: destinationRecipient,
-			Amount:               new(big.Int).Set(amount),
-			DepositAddress:       quoteResp.Quote.DepositAddress,
-			Quote:                quoteResp.Quote,
-		}
-	}
-
-	feeStructure := feeStructureOverride
-	if feeStructure == nil {
-		computedFeeStructure, err := buildNearBridgeFeeStructure(ctx, chainID, erc20Tokens[0], legs[0].DepositAddress)
-		if err != nil {
-			return types.NearBridgeResult{}, err
-		}
-		feeStructure = &computedFeeStructure
-	}
-
-	amounts := make([]*big.Int, len(legs))
-	depositAddresses := make([]string, len(legs))
-	for i, leg := range legs {
-		amounts[i] = new(big.Int).Set(leg.Amount)
-		depositAddresses[i] = leg.DepositAddress
-	}
-
-	var result types.DepositAndSendExtendedResult
-	if constants.IsSolanaLike(chainID) {
-		result, err = HinkalSolanaDepositAndWithdraw(
-			ctx,
-			hinkal,
-			erc20Tokens,
-			amounts,
-			depositAddresses,
-			txCompletionTime,
-			feeStructure,
-		)
-	} else {
-		result, err = HinkalDepositAndWithdraw(
-			ctx,
-			hinkal,
-			erc20Tokens,
-			amounts,
-			depositAddresses,
-			txCompletionTime,
-			feeStructure,
-			true,
-		)
-	}
+	result, err := hinkalNearDepositAndBridgeLegs(ctx, hinkal, erc20Tokens[0], legs, txCompletionTime, feeStructureOverride, action)
 	if err != nil {
 		return types.NearBridgeResult{}, err
 	}
 
 	return types.NearBridgeResult{
 		DepositTxHash: result.DepositTxHash,
+		ScheduleID:    result.ScheduleID,
 		Legs:          legs,
 	}, nil
 }

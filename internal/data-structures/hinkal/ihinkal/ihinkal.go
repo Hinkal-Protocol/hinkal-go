@@ -71,6 +71,10 @@ type IHinkal interface {
 	DepositAndWithdraw(ctx context.Context, chainID int, erc20Address string, recipientAmounts []*big.Int, recipientAddresses []string, txCompletionTime *int, feeStructureOverride *types.FeeStructure, preEstimateGas bool) (types.DepositAndSendExtendedResult, error)
 	DepositAndBridge(ctx context.Context, chainID int, erc20Address string, recipients []types.BridgeRecipient, txCompletionTime *int, feeStructureOverride *types.FeeStructure, preEstimateGas bool) (types.DepositAndSendExtendedResult, error)
 	NearDepositAndBridge(ctx context.Context, chainID int, erc20Address string, recipientAmounts []*big.Int, recipientAddresses []string, params types.NearBridgeParams, txCompletionTime *int, feeStructureOverride *types.FeeStructure) (types.NearBridgeResult, error)
+	GetDepositAndBridgeQuote(ctx context.Context, chainID int, erc20Address string, destinationChainID int, destinationErc20Address string, sendAmounts []*big.Int, recipientAddresses []string, slippagePercent *float64, txCompletionTime *int) (types.DepositAndBridgeQuote, error)
+	DepositAndBridgeWithQuote(ctx context.Context, chainID int, erc20Address string, quote types.DepositAndBridgeQuote, txCompletionTime *int, feeStructureOverride *types.FeeStructure) (types.DepositAndSendExtendedResult, error)
+	GetStuckBridgeBalances(ctx context.Context, chainIDs []int) []types.StuckBridgeBalance
+	RecoverStuckBridgeBalance(ctx context.Context, balance types.StuckBridgeBalance, recipientAddress string) error
 	CheckSendTransactionStatus(ctx context.Context, scheduleID string) (types.ScheduledTransactionByIDResponse, error)
 	WithdrawStuckUtxos(ctx context.Context, chainID int, erc20Address string, recipientAddress string) ([]string, error)
 	CreateReceiveAddress(ctx context.Context, chainID int, forceFresh ...bool) (types.ReceiveVaultRecord, error)
@@ -78,8 +82,8 @@ type IHinkal interface {
 	RecoverReceiveVault(ctx context.Context, record types.ReceiveVaultRecord, token string, to string, returnTxData bool, chainID int) (types.TransactionRequest, string, error)
 	ClaimUtxo(ctx context.Context, chainID int, erc20Address string, claimableUtxo *utxo.Utxo, feeStructureOverride *types.FeeStructure, claimableSignature string) (string, error)
 	Withdraw(ctx context.Context, chainID int, erc20Addresses []string, amountChanges []*big.Int, recipientAddress string, isRelayerOff bool, feeToken string, feeStructureOverride *types.FeeStructure, action types.AdminTransactionType) (types.TransactionRequest, string, error)
-	Swap(ctx context.Context, chainID int, erc20Addresses []string, deltaAmounts []*big.Int, externalActionID types.ExternalActionID, swapData string, feeToken string, feeStructureOverride *types.FeeStructure) (string, error)
-	BridgePrivateToPrivate(ctx context.Context, sourceChainID int, sourceTokenAddress string, destChainID int, destTokenAddress string, amount string, recipient bridging.PrivateBridgeRecipient, slippage float64, feeToken string, feeStructureOverride *types.FeeStructure, action types.AdminTransactionType) (bridging.PrivateBridgeResult, error)
+	Swap(ctx context.Context, chainID int, erc20Addresses []string, deltaAmounts []*big.Int, externalActionID types.ExternalActionID, swapData string, feeToken string, feeStructureOverride *types.FeeStructure, slippagePercentage float64) (string, error)
+	BridgePrivateToPrivate(ctx context.Context, sourceChainID int, sourceTokenAddress string, destChainID int, destTokenAddress string, amount string, recipient bridging.PrivateBridgeRecipient, slippage float64, feeToken string, feeStructureOverride *types.FeeStructure) (bridging.PrivateBridgeResult, error)
 	InitUserKeysWithEnclaveSignature(ctx context.Context, mode types.LoginMessageMode) error
 	GetFeeStructure(ctx context.Context, chainID int, feeTokenAddress string, erc20Addresses []string, externalActionID types.ExternalActionID, calls []types.CallInfo, variableRate *big.Int, solanaTransactionParams *api.SolanaGasEstimateParams) (types.FeeStructure, error)
 	EmporiumOp(contract, callDataString string, invokeWallet bool, value *big.Int) (string, error)

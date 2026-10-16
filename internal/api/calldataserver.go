@@ -9,13 +9,15 @@ import (
 
 type emitTxPublicDataBody struct {
 	AdminData *types.AdminDataType `json:"adminData"`
+	TxHash    string               `json:"txHash,omitempty"`
 }
 
-func EmitTxPublicData(ctx context.Context, adminData *types.AdminDataType) error {
+func EmitTxPublicData(ctx context.Context, adminData *types.AdminDataType, txHash string) error {
 	if adminData == nil {
 		return nil
 	}
-	return Post(ctx, constants.GetDataServerURL()+constants.DataServerConfig.EmitTxPublicData, emitTxPublicDataBody{AdminData: adminData}, nil)
+	body := emitTxPublicDataBody{AdminData: adminData, TxHash: txHash}
+	return Post(ctx, constants.GetDataServerURL()+constants.DataServerConfig.EmitTxPublicData, body, nil)
 }
 
 type GetTokenPricesResponse struct {

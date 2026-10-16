@@ -133,7 +133,7 @@ func HinkalWithdraw(
 	}
 
 	submit := NewRelayerSubmit(RelayerSubmit{
-		AdminData: pretransaction.ConstructAdminData(action, chainID, erc20Addresses, amountChanges, ethereumAddress, nil),
+		AdminData: pretransaction.ConstructAdminData(action, chainID, erc20Addresses, amountChanges, ethereumAddress, nil, feeStructure.VariableRate),
 	})
 	if isRelayerOff {
 		submit = NewSelfSubmit(SelfSubmit{

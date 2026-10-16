@@ -8,8 +8,7 @@ import (
 )
 
 type ScheduledTransactionsNullifierIndexesRequest struct {
-	HashedEthereumAddress string   `json:"hashedEthereumAddress"`
-	Nullifiers            []string `json:"nullifiers"`
+	Nullifiers []string `json:"nullifiers"`
 }
 
 type ScheduledTransactionsNullifierIndexesResponse struct {

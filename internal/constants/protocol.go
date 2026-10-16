@@ -29,6 +29,21 @@ const (
 	ReceiveVaultSettleRequestTTLSeconds = 5 * 60
 	// ReceiveVaultRecoveryTTLSeconds bounds a recovery signature handed to the factory.
 	ReceiveVaultRecoveryTTLSeconds = 15 * 60
+	// ReceiveVaultAddressTTLSeconds is how long the relayer keeps watching a handed-out address. Not
+	// on chain: the contract will settle it any time, this only bounds the relayer's poll set and
+	// when the client stops reusing it.
+	ReceiveVaultAddressTTLSeconds = 14 * 24 * 60 * 60
+)
+
+type TokenType string
+
+const (
+	TokenTypeERC20         TokenType = "ERC20"
+	TokenTypeERC721        TokenType = "ERC721"
+	TokenTypeERC1155       TokenType = "ERC1155"
+	TokenTypeMetaplexNFT   TokenType = "Metaplex NFT"
+	TokenTypeToken2022NFT  TokenType = "Token-2022 NFT"
+	TokenTypeCompressedNFT TokenType = "Compressed NFT"
 )
 
 func IsNativePlaceholderAddress(address string, chainID ...int) bool {

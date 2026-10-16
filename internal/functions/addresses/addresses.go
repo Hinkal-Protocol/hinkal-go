@@ -25,3 +25,19 @@ func Normalize(chainID int, address string) string {
 func Equal(chainID int, left string, right string) bool {
 	return left != "" && right != "" && Normalize(chainID, left) == Normalize(chainID, right)
 }
+
+func IsRecipientAddressInvalid(address string, isSolana bool, isTron bool) bool {
+	if strings.TrimSpace(address) == "" {
+		return false
+	}
+	if constants.IsNativePlaceholderAddress(address) {
+		return true
+	}
+	if isSolana {
+		return !utils.IsValidSolanaPublicKey(address)
+	}
+	if isTron {
+		return !utils.IsValidTronAddress(address)
+	}
+	return !utils.IsEthersAddress(address)
+}

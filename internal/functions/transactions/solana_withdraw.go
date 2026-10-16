@@ -27,7 +27,7 @@ func resolveSolanaWithdrawFeeStructure(
 	amount *big.Int,
 	feeStructureOverride *types.FeeStructure,
 	solanaTransactionParams *api.SolanaGasEstimateParams,
-) (types.FeeStructure, error) {
+) (types.FeeStructure, *big.Int, error) {
 	var rawFeeStructure types.FeeStructure
 	if feeStructureOverride != nil {
 		rawFeeStructure = *feeStructureOverride
@@ -35,13 +35,14 @@ func resolveSolanaWithdrawFeeStructure(
 		var err error
 		rawFeeStructure, err = pretransaction.GetFeeStructure(ctx, chainID, mintAddresses[0], mintAddresses, types.ExternalActionTransact, nil, nil, solanaTransactionParams)
 		if err != nil {
-			return types.FeeStructure{}, err
+			return types.FeeStructure{}, nil, err
 		}
 	}
 	if err := fees.AssertSolanaFeeTokenMatchesMint(rawFeeStructure, mintAddresses[0]); err != nil {
-		return types.FeeStructure{}, err
+		return types.FeeStructure{}, nil, err
 	}
-	return fees.CalculateModifiedFeeStructure(ctx, chainID, token, new(big.Int).Neg(amount), normalizeFeeStructure(rawFeeStructure)), nil
+	rawFeeStructure = normalizeFeeStructure(rawFeeStructure)
+	return fees.CalculateModifiedFeeStructure(ctx, chainID, token, new(big.Int).Neg(amount), rawFeeStructure), rawFeeStructure.VariableRate, nil
 }
 
 func HinkalSolanaWithdraw(
@@ -81,7 +82,7 @@ func HinkalSolanaWithdraw(
 		Recipient:      recipientAddress,
 		NullifierCount: pretransaction.CalculateSolanaNullifierCount(ctx, hinkal, chainID, mintAddresses, amountChanges),
 	}
-	feeStructure, err := resolveSolanaWithdrawFeeStructure(ctx, chainID, mintAddresses, token, amountChanges[0], feeStructureOverride, solanaParams)
+	feeStructure, variableRate, err := resolveSolanaWithdrawFeeStructure(ctx, chainID, mintAddresses, token, amountChanges[0], feeStructureOverride, solanaParams)
 	if err != nil {
 		return "", err
 	}
@@ -96,7 +97,7 @@ func HinkalSolanaWithdraw(
 	if err != nil {
 		return "", err
 	}
-	adminData := pretransaction.ConstructAdminData(action, chainID, mintAddresses, amountChanges, ethereumAddress, nil)
+	adminData := pretransaction.ConstructAdminData(action, chainID, mintAddresses, amountChanges, ethereumAddress, nil, variableRate)
 
 	result, err := SolanaTransact(ctx, hinkal, HinkalSolanaTransactParams{
 		ChainID:       chainID,

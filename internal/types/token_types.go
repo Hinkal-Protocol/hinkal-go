@@ -43,6 +43,22 @@ type TokenBalance struct {
 	Timestamp string
 }
 
+type TokenBalanceWithUsdValue struct {
+	Token             ERC20Token `json:"token"`
+	Balance           *big.Int   `json:"balance"`
+	IsBalanceLoading  bool       `json:"isBalanceLoading,omitempty"`
+	UsdValue          float64    `json:"usdValue,omitempty"`
+	IsUsdValueLoading bool       `json:"isUsdValueLoading,omitempty"`
+}
+
+type TemporaryWalletBalance struct {
+	TokenBalanceWithUsdValue
+	Nonce               int                                `json:"nonce"`
+	EthAddress          string                             `json:"ethAddress"`
+	PrivateKey          string                             `json:"privateKey"`
+	RecoveryDestination TemporaryWalletRecoveryDestination `json:"recoveryDestination"`
+}
+
 type VolatileTokenChange struct {
 	TokenAddress  string `json:"tokenAddress"`
 	Amount        string `json:"amount"`

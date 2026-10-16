@@ -29,12 +29,14 @@ const (
 	ReceiveVaultNetworkSolana ReceiveVaultNetwork = "solana"
 )
 
-// ReceiveVaultRecord holds the terms an address was built with. Version IS part of the salt (see
-// ReceiveVaultParams) - it is fixed at creation and must be read back exactly as stored, never
-// recomputed as "whatever is current now".
+// ReceiveVaultRecord holds the terms an address was built with, plus its expiry: not on chain, only
+// the relayer's watch list and the client's reuse decision consult it, so it never sits in the salt.
+// Version, unlike expiry, IS part of the salt (see ReceiveVaultParams) - it is fixed at creation and
+// must be read back exactly as stored, never recomputed as "whatever is current now".
 type ReceiveVaultRecord struct {
 	Index        int                 `json:"index"`
 	Network      ReceiveVaultNetwork `json:"network"`
+	Expiry       string              `json:"expiry"`
 	Version      string              `json:"version"`
 	VaultAddress string              `json:"vaultAddress"`
 }
@@ -47,6 +49,7 @@ type ReceiveVaultOutputSignature struct {
 type ReceiveVaultBlockReason string
 
 const (
+	ReceiveVaultBlockExpired       ReceiveVaultBlockReason = "expired"
 	ReceiveVaultBlockNotShieldable ReceiveVaultBlockReason = "notShieldable"
 	ReceiveVaultBlockRiskySender   ReceiveVaultBlockReason = "riskySender"
 )
@@ -88,6 +91,7 @@ type ReceiveVaultAccount struct {
 type ReceiveVaultTerms struct {
 	Index   int
 	Network ReceiveVaultNetwork
+	Expiry  string
 	Version string
 }
 

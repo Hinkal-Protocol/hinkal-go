@@ -6,6 +6,8 @@ import (
 	"errors"
 	"math/big"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/Hinkal-Protocol/hinkal-go/internal/api"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/utxo"
@@ -70,7 +72,7 @@ func (h *Hinkal) Deposit(
 	if err != nil {
 		return types.TransactionRequest{}, "", err
 	}
-	return transactions.HinkalDeposit(ctx, h, erc20Tokens, amountChanges, preEstimateGas, returnTxData)
+	return transactions.HinkalDeposit(ctx, h, erc20Tokens, amountChanges, preEstimateGas, returnTxData, pretransaction.SdkAction(pretransaction.SdkDeposit))
 }
 
 func (h *Hinkal) DepositForOther(
@@ -89,7 +91,7 @@ func (h *Hinkal) DepositForOther(
 	if err != nil {
 		return types.TransactionRequest{}, "", err
 	}
-	return transactions.HinkalDepositForOther(ctx, h, erc20Tokens, amountChanges, recipientInfo, preEstimateGas, returnTxData)
+	return transactions.HinkalDepositForOther(ctx, h, erc20Tokens, amountChanges, recipientInfo, preEstimateGas, returnTxData, pretransaction.SdkAction(pretransaction.SdkDepositForOther))
 }
 
 func (h *Hinkal) DepositSolana(
@@ -103,7 +105,7 @@ func (h *Hinkal) DepositSolana(
 	if err != nil {
 		return "", err
 	}
-	return transactions.HinkalSolanaDeposit(ctx, h, amount, token, returnTxData)
+	return transactions.HinkalSolanaDeposit(ctx, h, amount, token, returnTxData, pretransaction.SdkAction(pretransaction.SdkDepositSolana))
 }
 
 func (h *Hinkal) DepositSolanaForOther(
@@ -122,7 +124,7 @@ func (h *Hinkal) DepositSolanaForOther(
 	if err != nil {
 		return "", err
 	}
-	return transactions.HinkalSolanaDepositForOther(ctx, h, amount, token, recipientInfo, returnTxData, variableRate)
+	return transactions.HinkalSolanaDepositForOther(ctx, h, amount, token, recipientInfo, returnTxData, variableRate, pretransaction.SdkAction(pretransaction.SdkDepositSolanaForOther))
 }
 
 func (h *Hinkal) ProoflessDeposit(
@@ -142,10 +144,10 @@ func (h *Hinkal) ProoflessDeposit(
 		return types.TransactionRequest{}, "", err
 	}
 	if constants.IsSolanaLike(chainID) {
-		txDataOrSignature, err := transactions.HinkalSolanaProoflessDeposit(ctx, h, erc20Tokens, amountChanges, stealthAddressStructures, recipientEncryptionKeysOverride, returnTxData)
+		txDataOrSignature, err := transactions.HinkalSolanaProoflessDeposit(ctx, h, erc20Tokens, amountChanges, stealthAddressStructures, recipientEncryptionKeysOverride, returnTxData, pretransaction.SdkAction(pretransaction.SdkProoflessDeposit))
 		return types.TransactionRequest{}, txDataOrSignature, err
 	}
-	return transactions.HinkalProoflessDeposit(ctx, h, erc20Tokens, amountChanges, stealthAddressStructures, recipientEncryptionKeysOverride, createBlockedUtxos, feeStructure, orderID, returnTxData)
+	return transactions.HinkalProoflessDeposit(ctx, h, erc20Tokens, amountChanges, stealthAddressStructures, recipientEncryptionKeysOverride, createBlockedUtxos, feeStructure, orderID, returnTxData, pretransaction.SdkAction(pretransaction.SdkProoflessDeposit))
 }
 
 func (h *Hinkal) Withdraw(
@@ -159,6 +161,9 @@ func (h *Hinkal) Withdraw(
 	feeStructureOverride *types.FeeStructure,
 	action types.AdminTransactionType,
 ) (types.TransactionRequest, string, error) {
+	if action == "" {
+		action = pretransaction.SdkAction(pretransaction.SdkWithdraw)
+	}
 	erc20Tokens, err := resolveERC20Tokens(ctx, chainID, erc20Addresses)
 	if err != nil {
 		return types.TransactionRequest{}, "", err
@@ -197,9 +202,9 @@ func (h *Hinkal) Transfer(
 		return "", err
 	}
 	if constants.IsSolanaLike(chainID) {
-		return transactions.HinkalSolanaTransfer(ctx, h, erc20Tokens, amountChanges, recipientAddress, feeStructureOverride)
+		return transactions.HinkalSolanaTransfer(ctx, h, erc20Tokens, amountChanges, recipientAddress, feeStructureOverride, pretransaction.SdkAction(pretransaction.SdkTransfer))
 	}
-	return transactions.HinkalTransfer(ctx, h, erc20Tokens, amountChanges, recipientAddress, feeToken, feeStructureOverride)
+	return transactions.HinkalTransfer(ctx, h, erc20Tokens, amountChanges, recipientAddress, feeToken, feeStructureOverride, pretransaction.SdkAction(pretransaction.SdkTransfer))
 }
 
 func (h *Hinkal) ClaimUtxo(
@@ -243,6 +248,7 @@ func (h *Hinkal) DepositAndWithdraw(
 			recipientAddresses,
 			txCompletionTime,
 			feeStructureOverride,
+			pretransaction.SdkAction(pretransaction.SdkDepositAndWithdraw),
 		)
 	}
 	return transactions.HinkalDepositAndWithdraw(
@@ -254,6 +260,7 @@ func (h *Hinkal) DepositAndWithdraw(
 		txCompletionTime,
 		feeStructureOverride,
 		preEstimateGas,
+		pretransaction.SdkAction(pretransaction.SdkDepositAndWithdraw),
 	)
 }
 
@@ -278,6 +285,7 @@ func (h *Hinkal) DepositAndBridge(
 		txCompletionTime,
 		feeStructureOverride,
 		preEstimateGas,
+		pretransaction.SdkAction(pretransaction.SdkDepositAndBridge),
 	)
 }
 
@@ -292,7 +300,6 @@ func (h *Hinkal) BridgePrivateToPrivate(
 	slippage float64,
 	feeToken string,
 	feeStructureOverride *types.FeeStructure,
-	action types.AdminTransactionType,
 ) (bridging.PrivateBridgeResult, error) {
 	sourceToken, err := resolveERC20Token(ctx, sourceChainID, sourceTokenAddress)
 	if err != nil {
@@ -302,7 +309,7 @@ func (h *Hinkal) BridgePrivateToPrivate(
 	if err != nil {
 		return bridging.PrivateBridgeResult{}, err
 	}
-	return transactions.HinkalBridgePrivateToPrivate(ctx, h, sourceToken, destToken, amount, recipient, slippage, feeToken, feeStructureOverride, action)
+	return transactions.HinkalBridgePrivateToPrivate(ctx, h, sourceToken, destToken, amount, recipient, slippage, feeToken, feeStructureOverride, pretransaction.SdkAction(pretransaction.SdkBridgePrivateToPrivate))
 }
 
 func (h *Hinkal) ProxyToPrivate(
@@ -319,7 +326,7 @@ func (h *Hinkal) ProxyToPrivate(
 	if err != nil {
 		return "", err
 	}
-	return transactions.HinkalProxyToPrivate(ctx, h, chainID, token, amount, subAccount, recipientInfo, feeToken, feeStructureOverride, "")
+	return transactions.HinkalProxyToPrivate(ctx, h, chainID, token, amount, subAccount, recipientInfo, feeToken, feeStructureOverride, pretransaction.SdkAction(pretransaction.SdkProxyToPrivate))
 }
 
 func (h *Hinkal) SolanaSponsoredShield(
@@ -334,7 +341,7 @@ func (h *Hinkal) SolanaSponsoredShield(
 	if err != nil {
 		return "", nil, err
 	}
-	return transactions.HinkalSolanaSponsoredShield(ctx, h, token, tempSubAccount, landedAmount, recipientInfo, "", nil)
+	return transactions.HinkalSolanaSponsoredShield(ctx, h, token, tempSubAccount, landedAmount, recipientInfo, pretransaction.SdkAction(pretransaction.SdkSolanaSponsoredShield), nil)
 }
 
 func (h *Hinkal) SolanaSponsoredProxySend(
@@ -349,7 +356,7 @@ func (h *Hinkal) SolanaSponsoredProxySend(
 	if err != nil {
 		return "", err
 	}
-	return transactions.HinkalSolanaSponsoredProxySend(ctx, h, token, tempSubAccount, landedAmount, recipientAddress, "")
+	return transactions.HinkalSolanaSponsoredProxySend(ctx, h, token, tempSubAccount, landedAmount, recipientAddress, pretransaction.SdkAction(pretransaction.SdkSolanaSponsoredProxySend))
 }
 
 func (h *Hinkal) NearDepositAndBridge(
@@ -378,7 +385,87 @@ func (h *Hinkal) NearDepositAndBridge(
 		params,
 		txCompletionTime,
 		feeStructureOverride,
+		pretransaction.SdkAction(pretransaction.SdkNearDepositAndBridge),
 	)
+}
+
+func (h *Hinkal) GetDepositAndBridgeQuote(
+	ctx context.Context,
+	chainID int,
+	erc20Address string,
+	destinationChainID int,
+	destinationErc20Address string,
+	sendAmounts []*big.Int,
+	recipientAddresses []string,
+	slippagePercent *float64,
+	txCompletionTime *int,
+) (types.DepositAndBridgeQuote, error) {
+	var sourceToken, destinationToken types.ERC20Token
+	group, groupCtx := errgroup.WithContext(ctx)
+	group.Go(func() (err error) {
+		sourceToken, err = resolveERC20Token(groupCtx, chainID, erc20Address)
+		return err
+	})
+	group.Go(func() (err error) {
+		destinationToken, err = resolveERC20Token(groupCtx, destinationChainID, destinationErc20Address)
+		return err
+	})
+	if err := group.Wait(); err != nil {
+		return types.DepositAndBridgeQuote{}, err
+	}
+
+	return transactions.GetDepositAndBridgeQuote(
+		ctx,
+		h,
+		sourceToken,
+		destinationToken,
+		sendAmounts,
+		recipientAddresses,
+		slippagePercent,
+		txCompletionTime,
+	)
+}
+
+func (h *Hinkal) DepositAndBridgeWithQuote(
+	ctx context.Context,
+	chainID int,
+	erc20Address string,
+	quote types.DepositAndBridgeQuote,
+	txCompletionTime *int,
+	feeStructureOverride *types.FeeStructure,
+) (types.DepositAndSendExtendedResult, error) {
+	if err := h.enforceRateLimit("DepositAndBridgeWithQuote", erc20Address, quote); err != nil {
+		return types.DepositAndSendExtendedResult{}, err
+	}
+	token, err := resolveERC20Token(ctx, chainID, erc20Address)
+	if err != nil {
+		return types.DepositAndSendExtendedResult{}, err
+	}
+	return transactions.HinkalDepositAndBridgeWithQuote(
+		ctx,
+		h,
+		token,
+		quote,
+		txCompletionTime,
+		feeStructureOverride,
+		pretransaction.SdkAction(pretransaction.SdkDepositAndBridgeWithQuote),
+	)
+}
+
+func (h *Hinkal) GetStuckBridgeBalances(ctx context.Context, chainIDs []int) []types.StuckBridgeBalance {
+	return transactions.GetStuckBridgeBalances(ctx, h, chainIDs)
+}
+
+func (h *Hinkal) RecoverStuckBridgeBalance(ctx context.Context, balance types.StuckBridgeBalance, recipientAddress string) error {
+	return transactions.RecoverStuckBridgeBalance(ctx, h, balance, recipientAddress)
+}
+
+func (h *Hinkal) StartRecoverStuckBridgeBalance(
+	ctx context.Context,
+	balance types.StuckBridgeBalance,
+	recipientAddress string,
+) (func(context.Context) error, error) {
+	return transactions.StartStuckBridgeBalanceRecovery(ctx, h, balance, recipientAddress)
 }
 
 func (h *Hinkal) WithdrawStuckUtxos(
@@ -426,15 +513,16 @@ func (h *Hinkal) Swap(
 	swapData string,
 	feeToken string,
 	feeStructureOverride *types.FeeStructure,
+	slippagePercentage float64, // percent, e.g. 0.7; 0 uses DefaultBridgingSlippage
 ) (string, error) {
 	if constants.IsSolanaLike(chainID) {
-		return h.SwapSolana(ctx, chainID, erc20Addresses, deltaAmounts, swapData, feeToken, feeStructureOverride)
+		return h.SwapSolana(ctx, chainID, erc20Addresses, deltaAmounts, swapData, feeToken, feeStructureOverride, slippagePercentage)
 	}
 	erc20Tokens, err := resolveERC20Tokens(ctx, chainID, erc20Addresses)
 	if err != nil {
 		return "", err
 	}
-	return transactions.HinkalSwap(ctx, h, erc20Tokens, deltaAmounts, externalActionID, swapData, feeToken, feeStructureOverride, constants.DefaultBridgingSlippage)
+	return transactions.HinkalSwap(ctx, h, erc20Tokens, deltaAmounts, externalActionID, swapData, feeToken, feeStructureOverride, slippagePercentage, pretransaction.SdkAction(pretransaction.SdkSwap))
 }
 
 // feeToken is unused on Solana (fee is always paid in the output token) and kept for API compatibility.
@@ -446,6 +534,7 @@ func (h *Hinkal) SwapSolana(
 	swapData string,
 	_feeToken string,
 	feeStructureOverride *types.FeeStructure,
+	slippagePercentage float64, // percent, e.g. 0.7; 0 uses DefaultBridgingSlippage
 ) (string, error) {
 	var parsed struct {
 		api.OKXSwapResponse
@@ -471,5 +560,7 @@ func (h *Hinkal) SwapSolana(
 		parsed.Data.InstructionLists,
 		parsed.Data.AddressLookupTableAccount,
 		feeStructureOverride,
+		slippagePercentage,
+		pretransaction.SdkAction(pretransaction.SdkSwap),
 	)
 }

@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/Hinkal-Protocol/hinkal-go/internal/api"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
@@ -91,6 +92,48 @@ func CalculateModifiedFeeStructure(
 	return types.FeeStructure{
 		FeeToken:     feeStructure.FeeToken,
 		FlatFee:      totalFee,
+		VariableRate: big.NewInt(0),
+	}
+}
+
+// CalculateModifiedFeeStructureForTokens is the same as CalculateModifiedFeeStructure but for a batch of tokens: every token contributes its own
+// variable fee, while the flat fee is still charged once for the transaction as a whole.
+func CalculateModifiedFeeStructureForTokens(
+	ctx context.Context,
+	chainID int,
+	amountTokens []types.ERC20Token,
+	amounts []*big.Int,
+	feeStructure types.FeeStructure,
+) types.FeeStructure {
+	variableOnlyFeeStructure := types.FeeStructure{
+		FeeToken:     feeStructure.FeeToken,
+		FlatFee:      big.NewInt(0),
+		VariableRate: feeStructure.VariableRate,
+	}
+
+	variableFees := make([]types.FeeStructure, len(amountTokens))
+	var wg sync.WaitGroup
+	for index, token := range amountTokens {
+		index, token := index, token
+		amount := big.NewInt(0)
+		if index < len(amounts) && amounts[index] != nil {
+			amount = amounts[index]
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			variableFees[index] = CalculateModifiedFeeStructure(ctx, chainID, token, amount, variableOnlyFeeStructure)
+		}()
+	}
+	wg.Wait()
+
+	flatFee := new(big.Int).Set(feeStructure.FlatFee)
+	for _, variableFee := range variableFees {
+		flatFee.Add(flatFee, variableFee.FlatFee)
+	}
+	return types.FeeStructure{
+		FeeToken:     feeStructure.FeeToken,
+		FlatFee:      flatFee,
 		VariableRate: big.NewInt(0),
 	}
 }

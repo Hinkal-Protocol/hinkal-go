@@ -19,6 +19,7 @@ func HinkalDepositForOther(
 	recipientInfo string,
 	preEstimateGas bool,
 	returnTxData bool,
+	action types.AdminTransactionType,
 ) (types.TransactionRequest, string, error) {
 	chainID, err := pretransaction.ValidateAndGetChainID(erc20Tokens)
 	if err != nil {
@@ -70,6 +71,8 @@ func HinkalDepositForOther(
 	if err != nil {
 		return result.TxRequest, result.TxHash, err
 	}
-	emitDepositAdminData(ctx, hinkal, types.AdminShield, chainID, erc20Tokens, amountChanges)
+	if !returnTxData {
+		emitDepositAdminData(ctx, hinkal, action, chainID, erc20Tokens, amountChanges, nil, result.TxHash)
+	}
 	return result.TxRequest, result.TxHash, nil
 }

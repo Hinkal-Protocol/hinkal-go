@@ -283,8 +283,10 @@ func (c *WalletClient) GetHeldTokenAddresses(ctx context.Context, base58Address 
 	}
 	account := resp.Data[0]
 
+	seen := map[string]bool{}
 	tokens := make([]string, 0, len(account.Trc20)+1)
 	if account.Balance > 0 {
+		seen[constants.ZeroAddress] = true
 		tokens = append(tokens, constants.ZeroAddress)
 	}
 	for _, entry := range account.Trc20 {
@@ -294,9 +296,10 @@ func (c *WalletClient) GetHeldTokenAddresses(ctx context.Context, base58Address 
 				continue
 			}
 			hexAddress, err := utils.AddressToHexFormat(tokenBase58)
-			if err != nil {
+			if err != nil || seen[hexAddress] {
 				continue
 			}
+			seen[hexAddress] = true
 			tokens = append(tokens, hexAddress)
 		}
 	}

@@ -50,6 +50,7 @@ func TermsFromReceiveVaultRecord(record types.ReceiveVaultRecord) types.ReceiveV
 	return types.ReceiveVaultTerms{
 		Index:   record.Index,
 		Network: record.Network,
+		Expiry:  record.Expiry,
 		Version: record.Version,
 	}
 }
@@ -66,6 +67,23 @@ func ReceiveVaultNetworkOf(chainID int) types.ReceiveVaultNetwork {
 		return types.ReceiveVaultNetworkTron
 	}
 	return types.ReceiveVaultNetworkEvm
+}
+
+// GetReceiveVaultExpiry is not on chain: the contract will settle an address any time, this only
+// bounds the relayer's watch list and when the client stops reusing an address.
+func GetReceiveVaultExpiry() *big.Int {
+	return big.NewInt(utils.GetCurrentTimeInSeconds() + constants.ReceiveVaultAddressTTLSeconds)
+}
+
+func IsReceiveVaultExpired(terms types.ReceiveVaultTerms) bool {
+	if terms.Expiry == "" {
+		return false
+	}
+	expiry, err := utils.ParseBigInt(terms.Expiry)
+	if err != nil {
+		return true
+	}
+	return expiry.Int64() < utils.GetCurrentTimeInSeconds()
 }
 
 func derivedKey(tag string, parts ...string) *ecdsa.PrivateKey {

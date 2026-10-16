@@ -52,5 +52,23 @@ type NearBridgeLeg struct {
 
 type NearBridgeResult struct {
 	DepositTxHash string          `json:"depositTxHash"`
+	ScheduleID    string          `json:"scheduleId,omitempty"`
 	Legs          []NearBridgeLeg `json:"legs"`
+}
+
+type NearIntentsRefundBalance struct {
+	TokenBalanceWithUsdValue
+	AssetID  string `json:"assetId"`
+	IsLegacy bool   `json:"isLegacy"` // true if in the old nk-derived account; picks which key set claimNearIntentsRefund signs with
+}
+
+// StuckBridgeBalance = TemporaryWalletBalance | NearIntentsRefundBalance
+type StuckBridgeBalance struct {
+	TokenBalanceWithUsdValue
+	Nonce               int                                `json:"nonce,omitempty"`
+	EthAddress          string                             `json:"ethAddress,omitempty"`
+	PrivateKey          string                             `json:"privateKey,omitempty"`
+	RecoveryDestination TemporaryWalletRecoveryDestination `json:"recoveryDestination,omitempty"`
+	AssetID             string                             `json:"assetId,omitempty"`
+	IsLegacy            bool                               `json:"isLegacy,omitempty"`
 }

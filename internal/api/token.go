@@ -29,6 +29,23 @@ func GetTokensInfo(ctx context.Context, chainID int, tokenAddresses []string, wa
 	return resp, nil
 }
 
+type getTokensBySymbolsRequest struct {
+	ChainID int      `json:"chainId"`
+	Symbols []string `json:"symbols"`
+}
+
+func GetTokensBySymbols(ctx context.Context, chainID int, symbols []string) ([]*types.ERC20Token, error) {
+	if len(symbols) == 0 {
+		return nil, nil
+	}
+	var resp []*types.ERC20Token
+	body := getTokensBySymbolsRequest{ChainID: chainID, Symbols: symbols}
+	if err := Post(ctx, constants.GetServerURL()+constants.ServerConfig.GetTokensBySymbols, body, &resp); err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
 type getTokensForChainRequest struct {
 	ChainID int `json:"chainId"`
 }

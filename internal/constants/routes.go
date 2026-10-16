@@ -22,6 +22,7 @@ var ServerConfig = struct {
 	RegisterReceiveVault          string
 	ReceiveVaultAccount           string
 	GetTokensInfo                 string
+	GetTokensBySymbols            string
 	GetTokensForChain             string
 	EvmTokenBalances              string
 	GetTokenData                  func(tokenSymbol string) string
@@ -45,6 +46,7 @@ var ServerConfig = struct {
 	RegisterReceiveVault:       "/receive-vault/register",
 	ReceiveVaultAccount:        "/receive-vault/account",
 	GetTokensInfo:              "/get-tokens-info",
+	GetTokensBySymbols:         "/get-tokens-by-symbols",
 	GetTokensForChain:          "/get-tokens-for-chain",
 	EvmTokenBalances:           "/evm-token-balances",
 	GetTokenData:               func(tokenSymbol string) string { return "/get-token-data/" + tokenSymbol },
@@ -124,6 +126,7 @@ var EnclaveConfig = struct {
 	Handshake                  string
 	GenerateProofs             string
 	StoreClaimableKey          string
+	AllocateRecipientInfos     string
 	GetUtxos                   string
 	StoreAndGetSignature       string
 	SignProof                  string
@@ -140,6 +143,7 @@ var EnclaveConfig = struct {
 	Handshake:                  "/handshake",
 	GenerateProofs:             "/generate-proofs",
 	StoreClaimableKey:          "/store-claimable-key",
+	AllocateRecipientInfos:     "/allocate-recipient-infos",
 	GetUtxos:                   "/get-user-utxos",
 	StoreAndGetSignature:       "/store-and-get-user-signature",
 	SignProof:                  "/sign-proof",

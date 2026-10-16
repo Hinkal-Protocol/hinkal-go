@@ -2,7 +2,6 @@ package receivevault
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"log"
@@ -21,7 +20,6 @@ import (
 	utxoimpl "github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/utxo"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/addresses"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/enclave"
-	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/tron"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/utils"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/web3"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/types"
@@ -179,6 +177,9 @@ func newestReusableRecord(records []types.ReceiveVaultRecord, network types.Rece
 		if record.Network != network {
 			continue
 		}
+		if IsReceiveVaultExpired(TermsFromReceiveVaultRecord(record)) {
+			continue
+		}
 		reusable = append(reusable, record)
 	}
 	if len(reusable) == 0 {
@@ -197,6 +198,7 @@ func claimFreshAddress(
 	if err != nil {
 		return types.ReceiveVaultRecord{}, err
 	}
+	expiry := GetReceiveVaultExpiry().String()
 	nextIndex := 0
 	for _, record := range knownRecords {
 		if record.Network == claim.network && record.Index >= nextIndex {
@@ -206,6 +208,7 @@ func claimFreshAddress(
 	return BuildReceiveVaultRecord(ctx, claim.userKeys, types.ReceiveVaultTerms{
 		Index:   nextIndex,
 		Network: claim.network,
+		Expiry:  expiry,
 		Version: version.String(),
 	})
 }
@@ -336,81 +339,17 @@ func solanaVaultBalance(
 	return amount, nil
 }
 
-func solanaHeldTokenAddresses(ctx context.Context, chainID int, vaultAddress string) ([]string, error) {
-	client, err := solanaClient(chainID)
-	if err != nil {
-		return nil, err
-	}
-	vault, err := solana.PublicKeyFromBase58(vaultAddress)
-	if err != nil {
-		return nil, err
-	}
-	lamports, err := client.GetBalance(ctx, vault, rpc.CommitmentConfirmed)
-	if err != nil {
-		return nil, err
-	}
-
-	tokens := make([]string, 0)
-	seen := map[string]bool{}
-	add := func(token string) {
-		if seen[token] {
-			return
-		}
-		seen[token] = true
-		tokens = append(tokens, token)
-	}
-	if lamports.Value > 0 {
-		add(constants.SolanaNativeAddress)
-	}
-	for _, programID := range []solana.PublicKey{solana.TokenProgramID, solana.Token2022ProgramID} {
-		accounts, err := client.GetTokenAccountsByOwner(
-			ctx,
-			vault,
-			&rpc.GetTokenAccountsConfig{ProgramId: &programID},
-			&rpc.GetTokenAccountsOpts{Encoding: solana.EncodingBase64},
-		)
-		if err != nil {
-			return nil, err
-		}
-		if accounts == nil {
-			continue
-		}
-		for _, account := range accounts.Value {
-			if account == nil || account.Account.Data == nil {
-				continue
-			}
-			data := account.Account.Data.GetBinary()
-			if len(data) >= 72 && binary.LittleEndian.Uint64(data[64:72]) > 0 {
-				add(solana.PublicKeyFromBytes(data[:32]).String())
-			}
-		}
-	}
-	return tokens, nil
-}
-
 // discoverHeldTokenAddresses mirrors the TS receive-vault-scan.utils.ts discoverHeldTokens: every
 // token address the vault currently (or, for EVM, ever) held a balance of, per network.
 func discoverHeldTokenAddresses(ctx context.Context, chainID int, vaultAddress string) ([]string, error) {
 	switch {
 	case constants.IsSolanaLike(chainID):
-		return solanaHeldTokenAddresses(ctx, chainID, vaultAddress)
+		return web3.GetSolanaWalletTokenAddresses(ctx, chainID, vaultAddress)
 	case constants.IsTronLike(chainID):
-		return tronHeldTokenAddresses(ctx, chainID, vaultAddress)
+		return web3.GetTronWalletTokenAddresses(ctx, vaultAddress, chainID)
 	default:
 		return web3.GetEvmWalletTokenAddresses(ctx, chainID, vaultAddress)
 	}
-}
-
-func tronHeldTokenAddresses(ctx context.Context, chainID int, vaultAddress string) ([]string, error) {
-	client, err := tron.NewWalletClient(chainID)
-	if err != nil {
-		return nil, err
-	}
-	base58Address, err := utils.ToTronBase58IfHex(vaultAddress)
-	if err != nil {
-		return nil, err
-	}
-	return client.GetHeldTokenAddresses(ctx, base58Address)
 }
 
 func scanTargets(
@@ -435,11 +374,25 @@ func scanTargets(
 		holdings = append(holdings, unshieldedHolding{record: record, chainID: chainID, token: token, reason: reason})
 	}
 
+	for _, block := range blocks {
+		if record, ok := findRecordByVault(records, block.VaultAddress, block.ChainID); ok {
+			add(record, block.ChainID, block.Token, types.ReceiveVaultBlockRiskySender)
+		}
+	}
+
+	// Every chain in the network is watched while unexpired; past expiry, funds on any of them recover.
 	for _, record := range records {
+		expired := IsReceiveVaultExpired(TermsFromReceiveVaultRecord(record))
 		for _, chainID := range ReceiveVaultChainsForNetwork(record.Network) {
 			heldTokens, err := discoverHeldTokenAddresses(ctx, chainID, record.VaultAddress)
 			if err != nil {
 				log.Printf("receive vault: token discovery failed on chain %d: %v", chainID, err)
+				continue
+			}
+			if expired {
+				for _, heldToken := range heldTokens {
+					add(record, chainID, heldToken, types.ReceiveVaultBlockExpired)
+				}
 				continue
 			}
 			shieldable, err := web3.GetErc20TokensForChainAPI(ctx, chainID)
@@ -459,12 +412,6 @@ func scanTargets(
 					add(record, chainID, heldToken, types.ReceiveVaultBlockNotShieldable)
 				}
 			}
-		}
-	}
-
-	for _, block := range blocks {
-		if record, ok := findRecordByVault(records, block.VaultAddress, block.ChainID); ok {
-			add(record, block.ChainID, block.Token, types.ReceiveVaultBlockRiskySender)
 		}
 	}
 

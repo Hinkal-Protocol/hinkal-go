@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"strings"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/ethereum/go-ethereum/common"
 	solanago "github.com/gagliardetto/solana-go"
 
@@ -66,4 +68,131 @@ func SolanaAtaAddress(token types.ERC20Token, owner string) (string, error) {
 		return "", err
 	}
 	return ata.String(), nil
+}
+
+func getPublicBalance(ctx context.Context, chainID int, ethereumAddress string, token types.ERC20Token) *types.TokenBalance {
+	balance, err := GetPublicBalanceByAddress(ctx, chainID, token, ethereumAddress)
+	if err != nil || balance == nil {
+		return nil
+	}
+	if balance.Sign() <= 0 {
+		return nil
+	}
+	return &types.TokenBalance{Token: token, Balance: balance}
+}
+
+func GetPublicBalancesOfTokens(ctx context.Context, chainID int, ethereumAddress string, tokens []types.ERC20Token) ([]types.TokenBalance, error) {
+	if tokens == nil {
+		chainTokens, err := GetErc20TokensForChainAPI(ctx, chainID)
+		if err != nil {
+			return nil, err
+		}
+		tokens = chainTokens
+	}
+	tokensList := make([]types.ERC20Token, 0, len(tokens))
+	for _, token := range tokens {
+		if !token.Is2022Program {
+			tokensList = append(tokensList, token)
+		}
+	}
+
+	balances := make([]*types.TokenBalance, len(tokensList))
+	group, groupCtx := errgroup.WithContext(ctx)
+	for index, token := range tokensList {
+		index, token := index, token
+		group.Go(func() error {
+			balances[index] = getPublicBalance(groupCtx, chainID, ethereumAddress, token)
+			return nil
+		})
+	}
+	if err := group.Wait(); err != nil {
+		return nil, err
+	}
+
+	result := make([]types.TokenBalance, 0, len(balances))
+	for _, balance := range balances {
+		if balance != nil {
+			result = append(result, *balance)
+		}
+	}
+	return result, nil
+}
+
+func GetHyperCorePublicBalances(ctx context.Context, chainID int, ethereumAddress string, tokensToUpdate []types.ERC20Token) ([]types.TokenBalance, error) {
+	rpcURL, err := constants.RPCURL(chainID)
+	if err != nil {
+		return nil, err
+	}
+	infoURL := rpcURL + "/info"
+	var spotState types.HyperCoreSpotState
+	var perpsState types.HyperCorePerpsState
+	group, groupCtx := errgroup.WithContext(ctx)
+	group.Go(func() error {
+		return api.Post(groupCtx, infoURL, map[string]string{"type": "spotClearinghouseState", "user": ethereumAddress}, &spotState)
+	})
+	group.Go(func() error {
+		return api.Post(groupCtx, infoURL, map[string]string{"type": "clearinghouseState", "user": ethereumAddress}, &perpsState)
+	})
+	if err := group.Wait(); err != nil {
+		return nil, err
+	}
+
+	tokenBalances := make([]types.TokenBalance, 0, len(tokensToUpdate))
+	for _, token := range tokensToUpdate {
+		amount := ""
+		if strings.EqualFold(token.Erc20TokenAddress, constants.HyperCorePerpsUSDCAddress) {
+			if perpsState.MarginSummary != nil {
+				amount = perpsState.MarginSummary.AccountValue
+			}
+		} else {
+			for _, balance := range spotState.Balances {
+				if balance.Coin == token.Symbol {
+					amount = balance.Total
+					break
+				}
+			}
+		}
+		balance := big.NewInt(0)
+		if amount != "" {
+			balance, err = GetAmountInWei(token, amount)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if balance.Sign() > 0 {
+			tokenBalances = append(tokenBalances, types.TokenBalance{Token: token, Balance: balance})
+		}
+	}
+	return tokenBalances, nil
+}
+
+func GetSolanaPublicBalances(ctx context.Context, chainID int, ethereumAddress string, tokensToUpdate []types.ERC20Token) ([]types.TokenBalance, error) {
+	tokenBalances := make([]types.TokenBalance, len(tokensToUpdate))
+	group, groupCtx := errgroup.WithContext(ctx)
+	for index, token := range tokensToUpdate {
+		index, token := index, token
+		group.Go(func() error {
+			if IsNFTToken(token) {
+				tokenBalances[index] = types.TokenBalance{Token: token, Balance: big.NewInt(1)}
+				return nil
+			}
+			balance, err := getSolanaPublicBalanceByAddress(groupCtx, chainID, token, ethereumAddress)
+			if err != nil {
+				return err
+			}
+			tokenBalances[index] = types.TokenBalance{Token: token, Balance: balance}
+			return nil
+		})
+	}
+	if err := group.Wait(); err != nil {
+		return nil, err
+	}
+
+	result := make([]types.TokenBalance, 0, len(tokenBalances))
+	for _, tokenBalance := range tokenBalances {
+		if tokenBalance.Balance.Sign() > 0 {
+			result = append(result, tokenBalance)
+		}
+	}
+	return result, nil
 }

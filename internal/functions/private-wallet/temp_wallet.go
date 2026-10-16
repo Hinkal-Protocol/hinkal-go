@@ -69,6 +69,14 @@ func DeriveTempWalletFromEVMPrivateKey(chainID int, evmPrivateKey string) (Deriv
 	return DerivedTempWallet{Address: evmAddress, PrivateKey: evmPrivateKey}, nil
 }
 
+func DeriveTempWallet(userKeys *cryptokeys.UserKeys, chainID int, nonce *big.Int, isLegacy bool) (DerivedTempWallet, error) {
+	evmPrivateKey, err := tempWalletEVMPrivateKey(userKeys, nonce, isLegacy)
+	if err != nil {
+		return DerivedTempWallet{}, err
+	}
+	return DeriveTempWalletFromEVMPrivateKey(chainID, evmPrivateKey)
+}
+
 func tempWalletEVMPrivateKey(userKeys *cryptokeys.UserKeys, nonce *big.Int, isLegacy bool) (string, error) {
 	if isLegacy {
 		return userKeys.GetLegacySignerPrivateKeyFromNonce(nonce)

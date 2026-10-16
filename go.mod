@@ -9,6 +9,7 @@ require (
 	github.com/fbsobreira/gotron-sdk v0.26.0
 	github.com/gagliardetto/binary v0.8.0
 	github.com/gagliardetto/solana-go v1.21.0
+	github.com/google/uuid v1.6.0
 	github.com/holiman/uint256 v1.3.2
 	github.com/iden3/go-iden3-crypto v0.0.17
 	github.com/mr-tron/base58 v1.3.0
@@ -38,7 +39,6 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/goccy/go-json v0.10.6 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/logrusorgru/aurora v2.0.3+incompatible // indirect

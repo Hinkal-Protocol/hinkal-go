@@ -168,7 +168,7 @@ func actionPrivateWallet(
 			swapPairTokens[i] = change.Token
 		}
 	}
-	adminData := pretransaction.ConstructAdminData(action, chainID, adminTokenAddresses, adminAmounts, ethereumAddress, swapPairTokens)
+	adminData := pretransaction.ConstructAdminData(action, chainID, adminTokenAddresses, adminAmounts, ethereumAddress, swapPairTokens, feeStructure.VariableRate)
 
 	messageSeed, err := utils.RandomBigInt(31)
 	if err != nil {

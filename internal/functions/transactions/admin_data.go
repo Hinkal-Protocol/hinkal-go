@@ -18,6 +18,8 @@ func emitDepositAdminData(
 	chainID int,
 	erc20Tokens []types.ERC20Token,
 	amountChanges []*big.Int,
+	variableRate *big.Int,
+	txHash string,
 ) {
 	ethereumAddress, err := hinkal.GetEthereumAddress(ctx)
 	if err != nil {
@@ -28,11 +30,11 @@ func emitDepositAdminData(
 	for i, token := range erc20Tokens {
 		erc20Addresses[i] = token.Erc20TokenAddress
 	}
-	adminData := pretransaction.ConstructAdminData(action, chainID, erc20Addresses, amountChanges, ethereumAddress, nil)
+	adminData := pretransaction.ConstructAdminData(action, chainID, erc20Addresses, amountChanges, ethereumAddress, nil, variableRate)
 	if adminData == nil {
 		return
 	}
-	if err := api.EmitTxPublicData(ctx, adminData); err != nil {
+	if err := api.EmitTxPublicData(ctx, adminData, txHash); err != nil {
 		log.Printf("emit tx public data error: %v", err)
 	}
 }

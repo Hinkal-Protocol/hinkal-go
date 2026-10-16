@@ -72,6 +72,9 @@ type (
 	NearBridgeLeg    = types.NearBridgeLeg
 	NearIntentsQuote = types.NearIntentsQuote
 
+	DepositAndBridgeQuote = types.DepositAndBridgeQuote
+	StuckBridgeBalance    = types.StuckBridgeBalance
+
 	ScheduledTransactionByIDResponse = types.ScheduledTransactionByIDResponse
 	ScheduledTransactionItemStatus   = types.ScheduledTransactionItemStatus
 	ScheduledTransactionStatus       = types.ScheduledTransactionStatus
@@ -97,6 +100,7 @@ var (
 )
 
 const (
+	ReceiveVaultBlockExpired       = types.ReceiveVaultBlockExpired
 	ReceiveVaultBlockRiskySender   = types.ReceiveVaultBlockRiskySender
 	ReceiveVaultBlockNotShieldable = types.ReceiveVaultBlockNotShieldable
 )

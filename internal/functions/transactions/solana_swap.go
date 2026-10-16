@@ -19,18 +19,6 @@ import (
 	"github.com/Hinkal-Protocol/hinkal-go/internal/types"
 )
 
-func solanaSwapSlippagePercent(hinkal ihinkal.HinkalInternal) float64 {
-	raw, ok := hinkal.CacheDevice().Get(constants.StorageKeys.SlippagePercentage)
-	if !ok {
-		return 0
-	}
-	value, err := strconv.ParseFloat(raw, 64)
-	if err != nil {
-		return 0
-	}
-	return value
-}
-
 var errSolanaSwapTwoTokens = errors.New("transactions: Solana swap requires exactly two tokens")
 
 func HinkalSolanaSwap(
@@ -42,7 +30,12 @@ func HinkalSolanaSwap(
 	instructionLists []api.OKXSwapResponseInstruction,
 	addressLookupTableAccount []string,
 	feeStructureOverride *types.FeeStructure,
+	slippagePercentage float64,
+	action types.AdminTransactionType,
 ) (string, error) {
+	if slippagePercentage == 0 {
+		slippagePercentage = constants.DefaultBridgingSlippage
+	}
 	chainID, err := pretransaction.ValidateAndGetChainID(erc20Tokens)
 	if err != nil {
 		return "", err
@@ -100,7 +93,7 @@ func HinkalSolanaSwap(
 	if err != nil {
 		return "", err
 	}
-	slippageAmount := outputAmount * solanaSwapSlippagePercent(hinkal) / 100
+	slippageAmount := outputAmount * slippagePercentage / 100
 	slippageWei, err := web3.GetAmountInWei(outputToken, strconv.FormatFloat(slippageAmount, 'f', outputToken.Decimals, 64))
 	if err != nil {
 		return "", err
@@ -147,7 +140,7 @@ func HinkalSolanaSwap(
 	if err != nil {
 		return "", err
 	}
-	adminData := pretransaction.ConstructAdminData(types.AdminPrivateSwap, chainID, mintAddresses, amountChanges, ethereumAddress, erc20Tokens)
+	adminData := pretransaction.ConstructAdminData(action, chainID, mintAddresses, amountChanges, ethereumAddress, erc20Tokens, feeStructure.VariableRate)
 
 	result, err := SolanaTransact(ctx, hinkal, HinkalSolanaTransactParams{
 		ChainID:            chainID,

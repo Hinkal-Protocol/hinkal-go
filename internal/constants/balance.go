@@ -1,0 +1,3 @@
+package constants
+
+const HyperCorePerpsUSDCAddress = "0xaf88d065e77c8cc2239327c5edb3a432268e5831"

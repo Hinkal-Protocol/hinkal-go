@@ -34,6 +34,7 @@ type chainIDs struct {
 	Plasma    int
 	Ink       int
 	HyperEVM  int
+	HyperCore int
 }
 
 var ChainIDs = chainIDs{
@@ -63,6 +64,7 @@ var ChainIDs = chainIDs{
 	Plasma:    9745,
 	Ink:       57073,
 	HyperEVM:  999,
+	HyperCore: 1337,
 }
 
 const SolanaChainIDStr = "4sGjMW1sUnHzSxGspuhpqLDx6wiyjNtZ"
@@ -257,6 +259,13 @@ var EthereumNetworkRegistry = map[int]types.EthereumNetwork{
 		Supported: false,
 		Priority:  19,
 	},
+	ChainIDs.HyperCore: {
+		Name:      "HyperCore",
+		ChainID:   ChainIDs.HyperCore,
+		RPCURL:    "https://api.hyperliquid.xyz",
+		Supported: false,
+		Priority:  20,
+	},
 }
 
 var TronChainIDs = []int{ChainIDs.TronNile, ChainIDs.TronMainnet, ChainIDs.TronLocalnet}
@@ -329,9 +338,20 @@ var BridgeDestinationOnlyChains = []int{
 	ChainIDs.Plasma,
 	ChainIDs.Ink,
 	ChainIDs.HyperEVM,
+	ChainIDs.HyperCore,
 }
 
 var BridgeDestinationChains = append(copyChainIDs(BridgeSupportedChains), BridgeDestinationOnlyChains...)
+
+func FrontEndSupportedChains() []int {
+	ids := make([]int, 0, len(HinkalSupportedChains))
+	for _, id := range HinkalSupportedChains {
+		if !IsTronLike(id) {
+			ids = append(ids, id)
+		}
+	}
+	return append(ids, CurrentTronChainID())
+}
 
 func IsHinkalSupportedChain(chainID int) bool {
 	return contains(HinkalSupportedChains, chainID)

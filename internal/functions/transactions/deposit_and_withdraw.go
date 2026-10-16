@@ -88,6 +88,7 @@ func hinkalWithdrawBatchPrepare(
 	feeStructure types.FeeStructure,
 	ethereumAddress string,
 	pendingLeaves []string,
+	action types.AdminTransactionType,
 ) ([]web3.TransactCallRelayerBatchItem, error) {
 	if len(userDepositedUtxos) == 0 {
 		return nil, errUserDepositedUtxosEmpty
@@ -155,12 +156,13 @@ func hinkalWithdrawBatchPrepare(
 				proof := result.Proof
 
 				adminData := pretransaction.ConstructAdminData(
-					types.AdminPublicToPublicSend,
+					action,
 					chainID,
 					[]string{tokenAddress},
 					[]*big.Int{new(big.Int).Neg(utxoToWithdraw.Amount)},
 					ethereumAddress,
 					nil,
+					feeStructure.VariableRate,
 				)
 
 				batchTransactions[batchIndex] = web3.TransactCallRelayerBatchItem{
@@ -194,9 +196,10 @@ func HinkalWithdrawBatch(
 	ethereumAddress string,
 	hashedEthereumAddress string,
 	txCompletionTime *int,
+	action types.AdminTransactionType,
 ) (string, error) {
 	transactions, err := hinkalWithdrawBatchPrepare(
-		ctx, hinkal, chainID, erc20Token, userDepositedUtxos, feeStructure, ethereumAddress, nil,
+		ctx, hinkal, chainID, erc20Token, userDepositedUtxos, feeStructure, ethereumAddress, nil, action,
 	)
 	if err != nil {
 		return "", err
@@ -220,6 +223,7 @@ func evmDepositAndWithdraw(
 	recipientAmounts []*big.Int,
 	recipientAddresses []string,
 	depositContext depositAndWithdrawContext,
+	action types.AdminTransactionType,
 ) (types.DepositAndSendExtendedResult, error) {
 	chainID := depositContext.chainID
 	utxoAmounts, _ := depositAndWithdrawUtxoAmounts(recipientAmounts, depositContext.feeStructure)
@@ -247,7 +251,7 @@ func evmDepositAndWithdraw(
 		var err error
 		batchTransactions, err = hinkalWithdrawBatchPrepare(
 			ctx, hinkal, chainID, erc20Token, recipientUtxos, depositContext.feeStructure,
-			depositContext.ethereumAddress, preparedDeposit.PendingLeaves,
+			depositContext.ethereumAddress, preparedDeposit.PendingLeaves, action,
 		)
 		return err
 	})
@@ -272,6 +276,7 @@ func tronDepositAndWithdraw(
 	recipientAmounts []*big.Int,
 	recipientAddresses []string,
 	depositContext depositAndWithdrawContext,
+	action types.AdminTransactionType,
 ) (types.DepositAndSendExtendedResult, error) {
 	chainID := depositContext.chainID
 	utxoAmounts, totalDepositAmount := depositAndWithdrawUtxoAmounts(recipientAmounts, depositContext.feeStructure)
@@ -349,7 +354,7 @@ func tronDepositAndWithdraw(
 		var err error
 		batchTransactions, err = hinkalWithdrawBatchPrepare(
 			ctx, hinkal, chainID, erc20Token, recipientUtxos, depositContext.feeStructure,
-			depositContext.ethereumAddress, pendingLeaves,
+			depositContext.ethereumAddress, pendingLeaves, action,
 		)
 		return err
 	})
@@ -376,6 +381,7 @@ func HinkalDepositAndWithdraw(
 	txCompletionTime *int,
 	feeStructureOverride *types.FeeStructure,
 	preEstimateGas bool,
+	action types.AdminTransactionType,
 ) (types.DepositAndSendExtendedResult, error) {
 	chainID, err := pretransaction.ValidateAndGetChainID(erc20Tokens)
 	if err != nil {
@@ -413,7 +419,7 @@ func HinkalDepositAndWithdraw(
 	}
 
 	if !constants.IsTronLike(chainID) {
-		return evmDepositAndWithdraw(ctx, hinkal, erc20Token, recipientAmounts, recipientAddresses, depositContext)
+		return evmDepositAndWithdraw(ctx, hinkal, erc20Token, recipientAmounts, recipientAddresses, depositContext, action)
 	}
 
 	if len(recipientAmounts) > constants.MaxTronSelfOutputs {
@@ -422,5 +428,5 @@ func HinkalDepositAndWithdraw(
 			constants.MaxTronSelfOutputs,
 		)
 	}
-	return tronDepositAndWithdraw(ctx, hinkal, erc20Token, recipientAmounts, recipientAddresses, depositContext)
+	return tronDepositAndWithdraw(ctx, hinkal, erc20Token, recipientAmounts, recipientAddresses, depositContext, action)
 }
