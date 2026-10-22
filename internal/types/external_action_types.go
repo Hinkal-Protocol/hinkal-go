@@ -5,14 +5,15 @@ type ExternalActionID string
 const (
 	ExternalActionZero ExternalActionID = "" // TS literal 0n: no external action
 
-	ExternalActionTransact            ExternalActionID = "Transact"
-	ExternalActionLifi                ExternalActionID = "Lifi"
-	ExternalActionOkx                 ExternalActionID = "Okx"
-	ExternalActionEmporium            ExternalActionID = "Emporium"
-	ExternalActionWallet              ExternalActionID = "Wallet"
-	ExternalActionDepositOnChainUtxos ExternalActionID = "DepositOnChainUtxos"
-	ExternalActionProofLess           ExternalActionID = "ProofLess"
-	ExternalActionReceiveVaultSettle  ExternalActionID = "ReceiveVaultSettle"
+	ExternalActionTransact                    ExternalActionID = "Transact"
+	ExternalActionLifi                        ExternalActionID = "Lifi"
+	ExternalActionOkx                         ExternalActionID = "Okx"
+	ExternalActionEmporium                    ExternalActionID = "Emporium"
+	ExternalActionWallet                      ExternalActionID = "Wallet"
+	ExternalActionDepositOnChainUtxos         ExternalActionID = "DepositOnChainUtxos"
+	ExternalActionProofLess                   ExternalActionID = "ProofLess"
+	ExternalActionReceiveVaultSettle          ExternalActionID = "ReceiveVaultSettle"
+	ExternalActionReceiveVaultDeployAndSettle ExternalActionID = "ReceiveVaultDeployAndSettle"
 )
 
 type ExternalActionData struct {

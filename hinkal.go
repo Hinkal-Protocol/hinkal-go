@@ -64,8 +64,7 @@ type (
 	BridgeQuote         = types.BridgeQuote
 	TemporarySubAccount = types.TemporarySubAccount
 
-	PrivateBridgeRecipient = bridging.PrivateBridgeRecipient
-	PrivateBridgeResult    = bridging.PrivateBridgeResult
+	PrivateBridgeResult = bridging.PrivateBridgeResult
 
 	NearBridgeParams = types.NearBridgeParams
 	NearBridgeResult = types.NearBridgeResult

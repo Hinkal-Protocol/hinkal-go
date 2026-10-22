@@ -10,7 +10,7 @@ import (
 type registerReceiveVaultRequest struct {
 	VaultAddress     string                              `json:"vaultAddress"`
 	Network          types.ReceiveVaultNetwork           `json:"network"`
-	Index            int                                 `json:"index"`
+	Index            int                                 `json:"index,string"`
 	DeploymentMode   string                              `json:"deploymentMode"`
 	Params           types.ReceiveVaultParamsJSON        `json:"params"`
 	EncryptionKey    string                              `json:"encryptionKey"`
@@ -78,4 +78,23 @@ func FetchReceiveVaultAccount(
 		constants.ServerConfig.ReceiveVaultAccount,
 		request,
 	)
+}
+
+func FetchReceiveVaultNextIndex(
+	ctx context.Context,
+	proof types.ReceiveVaultAccountProof,
+	network types.ReceiveVaultNetwork,
+) (int, error) {
+	request := struct {
+		types.ReceiveVaultAccountProof
+		Network types.ReceiveVaultNetwork `json:"network"`
+	}{ReceiveVaultAccountProof: proof, Network: network}
+
+	resp, err := enclavePostSealedSigned[struct {
+		Index int `json:"index"`
+	}](ctx, constants.ServerConfig.ReceiveVaultNextIndex, request)
+	if err != nil {
+		return 0, err
+	}
+	return resp.Index, nil
 }

@@ -61,6 +61,19 @@ func loadAccount(
 	return account, nil
 }
 
+func getNextIndex(ctx context.Context, userKeys *cryptokeys.UserKeys, network types.ReceiveVaultNetwork) (int, error) {
+	shieldedPrivateKey, err := userKeys.GetShieldedPrivateKey()
+	if err != nil {
+		return 0, err
+	}
+	deadline := big.NewInt(utils.GetCurrentTimeInSeconds() + constants.ReceiveVaultSettleRequestTTLSeconds)
+	proof, err := SignReceiveVaultAccount(shieldedPrivateKey, deadline)
+	if err != nil {
+		return 0, err
+	}
+	return enclave.FetchReceiveVaultNextIndex(ctx, proof, network)
+}
+
 func fetchAccount(
 	ctx context.Context,
 	userKeys *cryptokeys.UserKeys,
@@ -107,32 +120,17 @@ func HinkalCreateReceiveAddress(
 		accountKey:    GetReceiveVaultAccountKey(shieldedPrivateKey),
 	}
 
-	account, err := fetchAccount(ctx, userKeys, claim.accountKey, shieldedPrivateKey)
-	if err != nil {
-		return types.ReceiveVaultRecord{}, err
-	}
-	knownRecords := account.Records
-
 	if len(forceFresh) == 0 || !forceFresh[0] {
-		if reusable, ok := newestReusableRecord(knownRecords, claim.network); ok {
+		account, err := fetchAccount(ctx, userKeys, claim.accountKey, shieldedPrivateKey)
+		if err != nil {
+			return types.ReceiveVaultRecord{}, err
+		}
+		if reusable, ok := newestReusableRecord(account.Records, claim.network); ok {
 			return reusable, nil
 		}
 	}
 
-	for {
-		claimed, err := claimFreshAddress(ctx, claim, knownRecords)
-		if err != nil {
-			return types.ReceiveVaultRecord{}, err
-		}
-		settled, err := registerRecord(ctx, claim, claimed)
-		if err != nil {
-			return types.ReceiveVaultRecord{}, err
-		}
-		if !settled {
-			return claimed, nil
-		}
-		knownRecords = append(knownRecords, claimed)
-	}
+	return claimFreshAddress(ctx, claim)
 }
 
 func registerRecord(ctx context.Context, claim receiveVaultClaim, record types.ReceiveVaultRecord) (bool, error) {
@@ -192,25 +190,29 @@ func newestReusableRecord(records []types.ReceiveVaultRecord, network types.Rece
 func claimFreshAddress(
 	ctx context.Context,
 	claim receiveVaultClaim,
-	knownRecords []types.ReceiveVaultRecord,
 ) (types.ReceiveVaultRecord, error) {
 	version, err := GetReceiveVaultCurrentVersion(ctx, claim.network)
 	if err != nil {
 		return types.ReceiveVaultRecord{}, err
 	}
 	expiry := GetReceiveVaultExpiry().String()
-	nextIndex := 0
-	for _, record := range knownRecords {
-		if record.Network == claim.network && record.Index >= nextIndex {
-			nextIndex = record.Index + 1
-		}
+	nextIndex, err := getNextIndex(ctx, claim.userKeys, claim.network)
+	if err != nil {
+		return types.ReceiveVaultRecord{}, err
 	}
-	return BuildReceiveVaultRecord(ctx, claim.userKeys, types.ReceiveVaultTerms{
+	claimed, err := BuildReceiveVaultRecord(ctx, claim.userKeys, types.ReceiveVaultTerms{
 		Index:   nextIndex,
 		Network: claim.network,
 		Expiry:  expiry,
 		Version: version.String(),
 	})
+	if err != nil {
+		return types.ReceiveVaultRecord{}, err
+	}
+	if _, err := registerRecord(ctx, claim, claimed); err != nil {
+		return types.ReceiveVaultRecord{}, err
+	}
+	return claimed, nil
 }
 
 func HinkalGetReceiveVaultAccount(

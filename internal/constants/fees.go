@@ -25,6 +25,7 @@ func PaySendVariableRate() *big.Int           { return big.NewInt(25) }
 func HinkalPrivateSendVariableRate() *big.Int { return big.NewInt(25) }
 func HinkalShieldVariableRate() *big.Int      { return big.NewInt(25) }
 func HinkalSwapVariableRate() *big.Int        { return big.NewInt(35) }
+func ReceiveVaultVariableRate() *big.Int      { return big.NewInt(0) } // vault settle takes the flat fee only
 
 const (
 	TempoDefaultGasTokenAddress = "0x20c0000000000000000000000000000000000000"

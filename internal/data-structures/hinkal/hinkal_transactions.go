@@ -169,7 +169,7 @@ func (h *Hinkal) Withdraw(
 		return types.TransactionRequest{}, "", err
 	}
 	if constants.IsSolanaLike(chainID) {
-		txHash, err := transactions.HinkalSolanaWithdraw(ctx, h, erc20Tokens, amountChanges, recipientAddress, feeStructureOverride, action)
+		txHash, err := transactions.HinkalSolanaWithdraw(ctx, h, erc20Tokens, amountChanges, recipientAddress, feeStructureOverride, nil, action)
 		return types.TransactionRequest{}, txHash, err
 	}
 	return transactions.HinkalWithdraw(
@@ -181,6 +181,7 @@ func (h *Hinkal) Withdraw(
 		isRelayerOff,
 		feeToken,
 		feeStructureOverride,
+		nil,
 		action,
 	)
 }
@@ -296,11 +297,14 @@ func (h *Hinkal) BridgePrivateToPrivate(
 	destChainID int,
 	destTokenAddress string,
 	amount string,
-	recipient bridging.PrivateBridgeRecipient,
+	vaultAddress string,
 	slippage float64,
 	feeToken string,
 	feeStructureOverride *types.FeeStructure,
 ) (bridging.PrivateBridgeResult, error) {
+	if err := h.enforceRateLimit("BridgePrivateToPrivate", sourceChainID, sourceTokenAddress, destChainID, destTokenAddress, amount, vaultAddress); err != nil {
+		return bridging.PrivateBridgeResult{}, err
+	}
 	sourceToken, err := resolveERC20Token(ctx, sourceChainID, sourceTokenAddress)
 	if err != nil {
 		return bridging.PrivateBridgeResult{}, err
@@ -309,7 +313,7 @@ func (h *Hinkal) BridgePrivateToPrivate(
 	if err != nil {
 		return bridging.PrivateBridgeResult{}, err
 	}
-	return transactions.HinkalBridgePrivateToPrivate(ctx, h, sourceToken, destToken, amount, recipient, slippage, feeToken, feeStructureOverride, pretransaction.SdkAction(pretransaction.SdkBridgePrivateToPrivate))
+	return transactions.HinkalBridgePrivateToPrivate(ctx, h, sourceToken, destToken, amount, vaultAddress, slippage, feeToken, feeStructureOverride, pretransaction.SdkAction(pretransaction.SdkBridgePrivateToPrivate))
 }
 
 func (h *Hinkal) ProxyToPrivate(

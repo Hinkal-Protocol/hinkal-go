@@ -25,19 +25,18 @@ func getLifiBridgeRecipient(
 	recipient string,
 	amount string,
 	tokenPriceDollar float64,
-	quoteToTemporaryDestination bool,
 	slippagePercentOverride *float64,
 ) (types.BridgeRecipient, error) {
 	nonce, err := utils.RandomBigInt(6)
 	if err != nil {
 		return types.BridgeRecipient{}, err
 	}
-	wallets, err := privatewallet.DeriveBridgeTempWallets(hinkal.GetUserKeys(), selectedChainID, destToken.ChainID, nonce)
+	sourceSubAccount, err := privatewallet.BuildTempSubAccountForChain(hinkal.GetUserKeys(), selectedChainID, nonce, false)
 	if err != nil {
 		return types.BridgeRecipient{}, err
 	}
-	walletPrivateKey := wallets.SourceSubAccount.PrivateKey
-	sourceAddress, _ := privatewallet.AddressFromSubAccount(selectedChainID, wallets.SourceSubAccount)
+	walletPrivateKey := sourceSubAccount.PrivateKey
+	sourceAddress, _ := privatewallet.AddressFromSubAccount(selectedChainID, sourceSubAccount)
 	if walletPrivateKey == "" || sourceAddress == "" {
 		return types.BridgeRecipient{}, errors.New("Failed to derive source temp wallet")
 	}
@@ -52,14 +51,6 @@ func getLifiBridgeRecipient(
 	if slippagePercentOverride != nil {
 		slippagePercent = *slippagePercentOverride
 	}
-	destinationAddress, _ := privatewallet.AddressFromSubAccount(destToken.ChainID, wallets.DestinationSubAccount)
-	toAddress := recipient
-	if quoteToTemporaryDestination {
-		toAddress = destinationAddress
-	}
-	if toAddress == "" {
-		return types.BridgeRecipient{}, errors.New("Failed to derive destination temp wallet")
-	}
 
 	quote, err := web3.GetLifiPrice(
 		ctx,
@@ -68,7 +59,7 @@ func getLifiBridgeRecipient(
 		amount,
 		slippagePercent*0.01, // LIFI needs number between 0 and 1
 		temporarySubAccount.EthAddress,
-		toAddress,
+		recipient,
 	)
 	if err != nil {
 		return types.BridgeRecipient{}, err
@@ -127,7 +118,6 @@ func getLifiBridgeRecipients(
 				recipient,
 				web3.GetAmountInToken(sourceToken, recipientAmounts[i]),
 				tokenPriceDollar,
-				false,
 				slippagePercent,
 			)
 			if err != nil {

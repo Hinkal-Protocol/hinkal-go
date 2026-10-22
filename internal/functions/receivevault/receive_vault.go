@@ -15,8 +15,10 @@ import (
 	gethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/mr-tron/base58"
 
+	"github.com/Hinkal-Protocol/hinkal-go/internal/api"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
 	cryptokeys "github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/crypto-keys"
+	pretransaction "github.com/Hinkal-Protocol/hinkal-go/internal/functions/pre-transaction"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/utils"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/web3"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/types"
@@ -75,7 +77,7 @@ func GetReceiveVaultExpiry() *big.Int {
 	return big.NewInt(utils.GetCurrentTimeInSeconds() + constants.ReceiveVaultAddressTTLSeconds)
 }
 
-func IsReceiveVaultExpired(terms types.ReceiveVaultTerms) bool {
+func IsReceiveVaultExpired(terms types.ReceiveVaultTerms, withinSeconds ...int64) bool {
 	if terms.Expiry == "" {
 		return false
 	}
@@ -83,7 +85,11 @@ func IsReceiveVaultExpired(terms types.ReceiveVaultTerms) bool {
 	if err != nil {
 		return true
 	}
-	return expiry.Int64() < utils.GetCurrentTimeInSeconds()
+	var within int64
+	if len(withinSeconds) > 0 {
+		within = withinSeconds[0]
+	}
+	return expiry.Int64() < utils.GetCurrentTimeInSeconds()+within
 }
 
 func derivedKey(tag string, parts ...string) *ecdsa.PrivateKey {
@@ -259,6 +265,35 @@ func GetReceiveVaultCurrentVersion(ctx context.Context, network types.ReceiveVau
 }
 
 func IsReceiveVaultSupported(chainID int) bool { return GetReceiveVaultFactoryAddress(chainID) != "" }
+
+// GetReceiveVaultSettleFeeParams: the first settle of an EVM/Tron vault also CREATE2-deploys it;
+// Solana vaults are program PDAs.
+func GetReceiveVaultSettleFeeParams(chainID int, tokenAddress string, isDeployed ...bool) ReceiveVaultSettleFeeParams {
+	if constants.IsSolanaLike(chainID) {
+		return ReceiveVaultSettleFeeParams{
+			ExternalActionID:        types.ExternalActionReceiveVaultSettle,
+			SolanaTransactionParams: &api.SolanaGasEstimateParams{MintTo: tokenAddress, RootInsertCount: 1},
+		}
+	}
+	if len(isDeployed) > 0 && isDeployed[0] {
+		return ReceiveVaultSettleFeeParams{ExternalActionID: types.ExternalActionReceiveVaultSettle}
+	}
+	return ReceiveVaultSettleFeeParams{ExternalActionID: types.ExternalActionReceiveVaultDeployAndSettle}
+}
+
+func GetReceiveVaultSettleFeeStructure(ctx context.Context, chainID int, tokenAddress string, isDeployed ...bool) (types.FeeStructure, error) {
+	params := GetReceiveVaultSettleFeeParams(chainID, tokenAddress, isDeployed...)
+	return pretransaction.GetFeeStructure(
+		ctx,
+		chainID,
+		tokenAddress,
+		[]string{tokenAddress},
+		params.ExternalActionID,
+		[]types.CallInfo{},
+		constants.ReceiveVaultVariableRate(),
+		params.SolanaTransactionParams,
+	)
+}
 
 func ReceiveVaultChainsForNetwork(network types.ReceiveVaultNetwork) []int {
 	chains := make([]int, 0, len(constants.HinkalSupportedChains))

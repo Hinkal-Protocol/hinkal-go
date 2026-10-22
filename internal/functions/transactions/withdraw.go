@@ -39,12 +39,17 @@ func resolveWithdrawFeeStructure(
 	feeToken string,
 	erc20Addresses []string,
 	feeStructureOverride *types.FeeStructure,
+	variableRateOverride *big.Int,
 	solanaTransactionParams *api.SolanaGasEstimateParams,
 ) (types.FeeStructure, error) {
 	if feeStructureOverride != nil {
-		return normalizeFeeStructure(*feeStructureOverride), nil
+		feeStructure := *feeStructureOverride
+		if variableRateOverride != nil {
+			feeStructure.VariableRate = variableRateOverride
+		}
+		return normalizeFeeStructure(feeStructure), nil
 	}
-	feeStructure, err := pretransaction.GetFeeStructure(ctx, chainID, feeToken, erc20Addresses, types.ExternalActionTransact, nil, nil, solanaTransactionParams)
+	feeStructure, err := pretransaction.GetFeeStructure(ctx, chainID, feeToken, erc20Addresses, types.ExternalActionTransact, nil, variableRateOverride, solanaTransactionParams)
 	if err != nil {
 		return types.FeeStructure{}, err
 	}
@@ -71,6 +76,7 @@ func HinkalWithdraw(
 	isRelayerOff bool,
 	feeToken string,
 	feeStructureOverride *types.FeeStructure,
+	variableRateOverride *big.Int,
 	action types.AdminTransactionType,
 ) (types.TransactionRequest, string, error) {
 	chainID, err := pretransaction.ValidateAndGetChainID(erc20Tokens)
@@ -90,7 +96,7 @@ func HinkalWithdraw(
 
 	feeStructure := types.ZeroFeeStructure()
 	if !isRelayerOff {
-		feeStructure, err = resolveWithdrawFeeStructure(ctx, chainID, feeToken, erc20Addresses, feeStructureOverride, nil)
+		feeStructure, err = resolveWithdrawFeeStructure(ctx, chainID, feeToken, erc20Addresses, feeStructureOverride, variableRateOverride, nil)
 		if err != nil {
 			return types.TransactionRequest{}, "", err
 		}

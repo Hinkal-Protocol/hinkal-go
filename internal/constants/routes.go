@@ -21,6 +21,8 @@ var ServerConfig = struct {
 	RemoveTemporaryWalletNonce    string
 	RegisterReceiveVault          string
 	ReceiveVaultAccount           string
+	ReceiveVaultNextIndex         string
+	CheckReceiveVault             string
 	GetTokensInfo                 string
 	GetTokensBySymbols            string
 	GetTokensForChain             string
@@ -45,6 +47,8 @@ var ServerConfig = struct {
 	RemoveTemporaryWalletNonce: "/temporary-wallets/remove-nonce",
 	RegisterReceiveVault:       "/receive-vault/register",
 	ReceiveVaultAccount:        "/receive-vault/account",
+	ReceiveVaultNextIndex:      "/receive-vault/next-index",
+	CheckReceiveVault:          "/receive-vault/check",
 	GetTokensInfo:              "/get-tokens-info",
 	GetTokensBySymbols:         "/get-tokens-by-symbols",
 	GetTokensForChain:          "/get-tokens-for-chain",

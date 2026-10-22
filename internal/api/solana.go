@@ -45,10 +45,11 @@ type SolanaTransactAccounts struct {
 }
 
 type SolanaGasEstimateParams struct {
-	MintTo         string `json:"mintTo"`
-	MintFrom       string `json:"mintFrom,omitempty"`
-	Recipient      string `json:"recipient,omitempty"`
-	NullifierCount int    `json:"nullifierCount"`
+	MintTo          string `json:"mintTo"`
+	MintFrom        string `json:"mintFrom,omitempty"`
+	Recipient       string `json:"recipient,omitempty"`
+	NullifierCount  int    `json:"nullifierCount"`
+	RootInsertCount int    `json:"rootInsertCount,omitempty"`
 }
 
 type SolanaSwapAccounts struct {

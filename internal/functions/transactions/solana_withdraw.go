@@ -26,6 +26,7 @@ func resolveSolanaWithdrawFeeStructure(
 	token types.ERC20Token,
 	amount *big.Int,
 	feeStructureOverride *types.FeeStructure,
+	variableRateOverride *big.Int,
 	solanaTransactionParams *api.SolanaGasEstimateParams,
 ) (types.FeeStructure, *big.Int, error) {
 	var rawFeeStructure types.FeeStructure
@@ -33,10 +34,13 @@ func resolveSolanaWithdrawFeeStructure(
 		rawFeeStructure = *feeStructureOverride
 	} else {
 		var err error
-		rawFeeStructure, err = pretransaction.GetFeeStructure(ctx, chainID, mintAddresses[0], mintAddresses, types.ExternalActionTransact, nil, nil, solanaTransactionParams)
+		rawFeeStructure, err = pretransaction.GetFeeStructure(ctx, chainID, mintAddresses[0], mintAddresses, types.ExternalActionTransact, nil, variableRateOverride, solanaTransactionParams)
 		if err != nil {
 			return types.FeeStructure{}, nil, err
 		}
+	}
+	if feeStructureOverride != nil && variableRateOverride != nil {
+		rawFeeStructure.VariableRate = variableRateOverride
 	}
 	if err := fees.AssertSolanaFeeTokenMatchesMint(rawFeeStructure, mintAddresses[0]); err != nil {
 		return types.FeeStructure{}, nil, err
@@ -52,6 +56,7 @@ func HinkalSolanaWithdraw(
 	amountChangesBase []*big.Int,
 	recipientAddress string,
 	feeStructureOverride *types.FeeStructure,
+	variableRateOverride *big.Int,
 	action types.AdminTransactionType,
 ) (string, error) {
 	chainID, err := pretransaction.ValidateAndGetChainID(erc20Tokens)
@@ -82,7 +87,7 @@ func HinkalSolanaWithdraw(
 		Recipient:      recipientAddress,
 		NullifierCount: pretransaction.CalculateSolanaNullifierCount(ctx, hinkal, chainID, mintAddresses, amountChanges),
 	}
-	feeStructure, variableRate, err := resolveSolanaWithdrawFeeStructure(ctx, chainID, mintAddresses, token, amountChanges[0], feeStructureOverride, solanaParams)
+	feeStructure, variableRate, err := resolveSolanaWithdrawFeeStructure(ctx, chainID, mintAddresses, token, amountChanges[0], feeStructureOverride, variableRateOverride, solanaParams)
 	if err != nil {
 		return "", err
 	}

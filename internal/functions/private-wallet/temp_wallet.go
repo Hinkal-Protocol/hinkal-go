@@ -20,11 +20,6 @@ type DerivedTempWallet struct {
 	PrivateKey string
 }
 
-type BridgeTempWallets struct {
-	SourceSubAccount      types.TemporarySubAccount
-	DestinationSubAccount types.TemporarySubAccount
-}
-
 // This function is just derived from the EVM private key to the Solana private key, Not all wallets have the same private key format.
 func SolanaPrivateKeyFromEVMPrivateKey(evmPrivateKey string) (string, error) {
 	seed := gethcommon.FromHex(evmPrivateKey)
@@ -108,25 +103,6 @@ func BuildTempSubAccountForChain(userKeys *cryptokeys.UserKeys, chainID int, non
 		return types.TemporarySubAccount{}, err
 	}
 	return BuildTempSubAccount(nonce, chainID, wallet), nil
-}
-
-func DeriveBridgeTempWallets(userKeys *cryptokeys.UserKeys, sourceChainID, destinationChainID int, nonce *big.Int) (BridgeTempWallets, error) {
-	evmPrivateKey, err := tempWalletEVMPrivateKey(userKeys, nonce, false)
-	if err != nil {
-		return BridgeTempWallets{}, err
-	}
-	sourceWallet, err := DeriveTempWalletFromEVMPrivateKey(sourceChainID, evmPrivateKey)
-	if err != nil {
-		return BridgeTempWallets{}, err
-	}
-	destinationWallet, err := DeriveTempWalletFromEVMPrivateKey(destinationChainID, evmPrivateKey)
-	if err != nil {
-		return BridgeTempWallets{}, err
-	}
-	return BridgeTempWallets{
-		SourceSubAccount:      BuildTempSubAccount(nonce, sourceChainID, sourceWallet),
-		DestinationSubAccount: BuildTempSubAccount(nonce, destinationChainID, destinationWallet),
-	}, nil
 }
 
 func AddressFromSubAccount(chainID int, subAccount types.TemporarySubAccount) (string, error) {
