@@ -28,6 +28,7 @@ import (
 func ResolveBridgeVaultAddress(
 	ctx context.Context,
 	hinkal ihinkal.HinkalInternal,
+	sourceChainID int,
 	destChainID int,
 	vaultAddress string,
 ) (string, error) {
@@ -35,6 +36,11 @@ func ResolveBridgeVaultAddress(
 		return "", fmt.Errorf("Deposit addresses are not supported on chain %d", destChainID)
 	}
 	if vaultAddress == "" {
+		sourceNetwork := receivevault.ReceiveVaultNetworkOf(sourceChainID)
+		destNetwork := receivevault.ReceiveVaultNetworkOf(destChainID)
+		if sourceNetwork != destNetwork {
+			return "", fmt.Errorf("vaultAddress is required to bridge from %s to %s", sourceNetwork, destNetwork)
+		}
 		record, err := hinkal.CreateReceiveAddress(ctx, destChainID)
 		if err != nil {
 			return "", err
@@ -343,7 +349,7 @@ func HinkalBridgePrivateToPrivate(
 	var settleFeeStructure types.FeeStructure
 	var group errgroup.Group
 	group.Go(func() error {
-		resolved, err := ResolveBridgeVaultAddress(ctx, hinkal, destToken.ChainID, vaultAddress)
+		resolved, err := ResolveBridgeVaultAddress(ctx, hinkal, sourceToken.ChainID, destToken.ChainID, vaultAddress)
 		destinationVaultAddress = resolved
 		return err
 	})

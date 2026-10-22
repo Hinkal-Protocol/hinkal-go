@@ -7,10 +7,11 @@ import (
 )
 
 type receiveVaultClaim struct {
-	userKeys      *cryptokeys.UserKeys
-	network       types.ReceiveVaultNetwork
-	encryptionKey string
-	accountKey    string
+	userKeys       *cryptokeys.UserKeys
+	network        types.ReceiveVaultNetwork
+	encryptionKey  string
+	accountKey     string
+	creatorAddress string
 }
 
 type ReceiveVaultSettleFeeParams struct {

@@ -17,6 +17,7 @@ type registerReceiveVaultRequest struct {
 	EncryptedOutput  string                              `json:"encryptedOutput"`
 	OutputSignatures []types.ReceiveVaultOutputSignature `json:"outputSignatures"`
 	AccountKey       string                              `json:"accountKey"`
+	CreatorAddress   string                              `json:"creatorAddress,omitempty"`
 }
 
 type registerReceiveVaultResponse struct {
@@ -39,6 +40,7 @@ func RegisterReceiveVault(
 	encryptionKey, accountKey string,
 	encryptedOutput string,
 	outputSignatures []types.ReceiveVaultOutputSignature,
+	creatorAddress string,
 ) (bool, error) {
 	resp, err := enclavePostSealedSigned[registerReceiveVaultResponse](
 		ctx,
@@ -53,6 +55,7 @@ func RegisterReceiveVault(
 			EncryptedOutput:  encryptedOutput,
 			OutputSignatures: outputSignatures,
 			AccountKey:       accountKey,
+			CreatorAddress:   creatorAddress,
 		},
 	)
 	if err != nil {

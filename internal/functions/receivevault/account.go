@@ -130,6 +130,10 @@ func HinkalCreateReceiveAddress(
 		}
 	}
 
+	if creatorAddress, err := hinkal.GetEthereumAddressByChain(ctx, chainID); err == nil {
+		claim.creatorAddress = creatorAddress
+	}
+
 	return claimFreshAddress(ctx, claim)
 }
 
@@ -166,6 +170,7 @@ func registerRecord(ctx context.Context, claim receiveVaultClaim, record types.R
 		claim.accountKey,
 		"0x"+common.Bytes2Hex(encryptedOutput),
 		outputSignatures,
+		claim.creatorAddress,
 	)
 }
 
