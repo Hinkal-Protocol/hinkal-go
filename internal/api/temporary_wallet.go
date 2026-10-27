@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"encoding/json"
+	"log"
 
 	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/types"
@@ -15,8 +17,16 @@ type TemporaryWalletNonceEntry struct {
 }
 
 type TemporaryWalletNoncesResponse struct {
-	Nonces       []int                       `json:"nonces"`
-	NonceEntries []TemporaryWalletNonceEntry `json:"nonceEntries"`
+	NonceEntries []TemporaryWalletNonceEntry
+}
+
+type rawTemporaryWalletNonceEntry struct {
+	TemporaryWalletNonceEntry
+	Nonce json.Number `json:"nonce"`
+}
+
+type rawTemporaryWalletNoncesResponse struct {
+	NonceEntries []rawTemporaryWalletNonceEntry `json:"nonceEntries"`
 }
 
 type TemporaryWalletNonceRequest struct {
@@ -32,12 +42,23 @@ type TemporaryWalletNonceResponse struct {
 }
 
 func GetTemporaryWalletNonces(ctx context.Context, chainID int, hashedEthereumAddress string) (TemporaryWalletNoncesResponse, error) {
-	var resp TemporaryWalletNoncesResponse
+	var raw rawTemporaryWalletNoncesResponse
 	url := constants.GetServerURL() + constants.ServerConfig.GetTemporaryWalletNonces(hashedEthereumAddress, chainID)
-	if err := Get(ctx, url, &resp); err != nil {
+	if err := Get(ctx, url, &raw); err != nil {
 		return TemporaryWalletNoncesResponse{}, err
 	}
-	return resp, nil
+
+	entries := make([]TemporaryWalletNonceEntry, 0, len(raw.NonceEntries))
+	for _, entry := range raw.NonceEntries {
+		nonce, err := entry.Nonce.Int64()
+		if err != nil || nonce < 0 {
+			log.Printf("Skipping invalid temporary wallet nonce %s on chain %d", entry.Nonce, chainID)
+			continue
+		}
+		entry.TemporaryWalletNonceEntry.Nonce = int(nonce)
+		entries = append(entries, entry.TemporaryWalletNonceEntry)
+	}
+	return TemporaryWalletNoncesResponse{NonceEntries: entries}, nil
 }
 
 func AddTemporaryWalletNonce(ctx context.Context, chainID int, hashedEthereumAddress string, nonce int, recoveryDestination types.TemporaryWalletRecoveryDestination) (TemporaryWalletNonceResponse, error) {

@@ -219,8 +219,8 @@ func buildAddressMap(hinkal ihinkal.HinkalInternal, nonceResults []chainNonceRes
 		for _, entry := range result.nonceEntries {
 			wallet, err := privatewallet.DeriveTempWallet(hinkal.GetUserKeys(), result.chainID, big.NewInt(int64(entry.Nonce)), entry.IsLegacy)
 			if err != nil {
-				log.Printf("Error creating address map: %v", err)
-				return newTemporaryWalletAddressMap()
+				log.Printf("Skipping invalid temporary wallet nonce %d on chain %d: %v", entry.Nonce, result.chainID, err)
+				continue
 			}
 			walletEntry := temporaryWalletEntry{ChainID: result.chainID, Nonce: entry.Nonce, RecoveryDestination: entry.RecoveryDestination}
 			if existing, ok := addressMap.entries[wallet.Address]; ok {

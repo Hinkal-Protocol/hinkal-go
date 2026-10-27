@@ -141,7 +141,7 @@ var EthereumNetworkRegistry = map[int]types.EthereumNetwork{
 	ChainIDs.ArcTestnet: {
 		Name:        "Arc Testnet",
 		ChainID:     ChainIDs.ArcTestnet,
-		RPCURL:      "https://rpc.testnet.arc.network",
+		RPCURL:      "https://rpc.testnet.arc.io",
 		Supported:   true,
 		Priority:    8,
 		MaxPageSize: 9999,
