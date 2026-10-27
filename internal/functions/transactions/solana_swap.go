@@ -28,7 +28,6 @@ func HinkalSolanaSwap(
 	amountChangesBase []*big.Int,
 	swapperAccountSalt *big.Int,
 	instructionLists []api.OKXSwapResponseInstruction,
-	addressLookupTableAccount []string,
 	feeStructureOverride *types.FeeStructure,
 	slippagePercentage float64,
 	action types.AdminTransactionType,
@@ -126,14 +125,13 @@ func HinkalSolanaSwap(
 	}
 
 	accounts := api.SolanaSwapAccounts{
-		Recipient:                 recipient.String(),
-		StorageAccount:            storageAccount.String(),
-		StorageVault:              storageVault.String(),
-		SwapperAccount:            swapperAccount.String(),
-		MintFrom:                  nonNativeMint(mintAddresses[0]),
-		MintTo:                    nonNativeMint(mintAddresses[1]),
-		RemainingAccounts:         remainingAccountsToOKX(remainingAccounts),
-		AddressLookupTableAccount: addressLookupTableAccount,
+		Recipient:         recipient.String(),
+		StorageAccount:    storageAccount.String(),
+		StorageVault:      storageVault.String(),
+		SwapperAccount:    swapperAccount.String(),
+		MintFrom:          nonNativeMint(mintAddresses[0]),
+		MintTo:            nonNativeMint(mintAddresses[1]),
+		RemainingAccounts: remainingAccountsToOKX(remainingAccounts),
 	}
 
 	ethereumAddress, err := hinkal.GetEthereumAddress(ctx)

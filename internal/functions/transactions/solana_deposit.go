@@ -6,15 +6,12 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"log"
-	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	bin "github.com/gagliardetto/binary"
 	solana "github.com/gagliardetto/solana-go"
 	associatedtokenaccount "github.com/gagliardetto/solana-go/programs/associated-token-account"
-	computebudget "github.com/gagliardetto/solana-go/programs/compute-budget"
 	"github.com/gagliardetto/solana-go/programs/system"
 	tokenprogram "github.com/gagliardetto/solana-go/programs/token"
 	token2022 "github.com/gagliardetto/solana-go/programs/token-2022"
@@ -290,54 +287,6 @@ func buildSolanaTransferInstructions(
 	return instructions, nil
 }
 
-const (
-	maxComputeUnitLimit       = 1_400_000
-	minComputeUnitLimit       = 200_000
-	computeUnitPaddingPercent = 0.2
-)
-
-// Simulate at the ceiling, then reserve what was actually consumed plus padding. Any failure
-// falls back to the ceiling, which is what the transaction would have asked for anyway.
-func estimateSolanaComputeUnitLimit(
-	ctx context.Context,
-	connection *rpc.Client,
-	payer solana.PublicKey,
-	instructions []solana.Instruction,
-) uint32 {
-	latest, err := connection.GetLatestBlockhash(ctx, rpc.CommitmentConfirmed)
-	if err != nil {
-		return maxComputeUnitLimit
-	}
-	tx, err := solana.NewTransaction(withComputeUnitLimit(instructions, maxComputeUnitLimit), latest.Value.Blockhash, solana.TransactionPayer(payer))
-	if err != nil {
-		return maxComputeUnitLimit
-	}
-	simulation, err := connection.SimulateTransactionWithOpts(ctx, tx, &rpc.SimulateTransactionOpts{
-		ReplaceRecentBlockhash: true,
-		Commitment:             rpc.CommitmentConfirmed,
-	})
-	if err != nil || simulation == nil || simulation.Value == nil {
-		return maxComputeUnitLimit
-	}
-	if simulation.Value.Err != nil {
-		log.Printf("solana compute-unit simulation failed: %v", simulation.Value.Err)
-	}
-	if simulation.Value.UnitsConsumed == nil || *simulation.Value.UnitsConsumed == 0 {
-		return maxComputeUnitLimit
-	}
-	padded := uint64(math.Ceil(float64(*simulation.Value.UnitsConsumed) * (1 + computeUnitPaddingPercent)))
-	return uint32(max(minComputeUnitLimit, min(padded, maxComputeUnitLimit)))
-}
-
-func withComputeUnitLimit(instructions []solana.Instruction, limit uint32) []solana.Instruction {
-	budget := []solana.Instruction{computebudget.NewSetComputeUnitLimitInstruction(limit).Build()}
-	return append(budget, instructions...)
-}
-
-func withSolanaComputeBudget(ctx context.Context, connection *rpc.Client, payer solana.PublicKey, instructions []solana.Instruction) []solana.Instruction {
-	return withComputeUnitLimit(instructions, estimateSolanaComputeUnitLimit(ctx, connection, payer, instructions))
-}
-
 func buildSolanaDepositTransaction(
 	ctx context.Context,
 	connection *rpc.Client,
@@ -348,11 +297,7 @@ func buildSolanaDepositTransaction(
 	if err != nil {
 		return nil, err
 	}
-	return solana.NewTransaction(
-		withSolanaComputeBudget(ctx, connection, signer, instructions),
-		latest.Value.Blockhash,
-		solana.TransactionPayer(signer),
-	)
+	return solanautils.NewV1Transaction(ctx, connection, signer, instructions, latest.Value.Blockhash)
 }
 
 func signAndSendSolanaInstructions(
@@ -369,11 +314,7 @@ func signAndSendSolanaInstructions(
 	}
 
 	return solanautils.SignAndConfirm(ctx, connection, program, func(blockhash solana.Hash) (*solana.Transaction, error) {
-		return solana.NewTransaction(
-			withSolanaComputeBudget(ctx, connection, signer, instructions),
-			blockhash,
-			solana.TransactionPayer(signer),
-		)
+		return solanautils.NewV1Transaction(ctx, connection, signer, instructions, blockhash)
 	})
 }
 
@@ -391,11 +332,7 @@ func sendSolanaInstructions(
 	if err != nil {
 		return "", err
 	}
-	latest, err := connection.GetLatestBlockhash(ctx, rpc.CommitmentConfirmed)
-	if err != nil {
-		return "", err
-	}
-	tx, err := solana.NewTransaction(withSolanaComputeBudget(ctx, connection, signer, instructions), latest.Value.Blockhash, solana.TransactionPayer(signer))
+	tx, err := buildSolanaDepositTransaction(ctx, connection, signer, instructions)
 	if err != nil {
 		return "", err
 	}

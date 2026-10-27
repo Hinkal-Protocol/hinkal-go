@@ -53,14 +53,13 @@ type SolanaGasEstimateParams struct {
 }
 
 type SolanaSwapAccounts struct {
-	Recipient                 string       `json:"recipient"`
-	StorageAccount            string       `json:"storageAccount"`
-	StorageVault              string       `json:"storageVault"`
-	SwapperAccount            string       `json:"swapperAccount"`
-	MintFrom                  *string      `json:"mintFrom"`
-	MintTo                    *string      `json:"mintTo"`
-	RemainingAccounts         []OKXAccount `json:"remainingAccounts"`
-	AddressLookupTableAccount []string     `json:"addressLookupTableAccount"`
+	Recipient         string       `json:"recipient"`
+	StorageAccount    string       `json:"storageAccount"`
+	StorageVault      string       `json:"storageVault"`
+	SwapperAccount    string       `json:"swapperAccount"`
+	MintFrom          *string      `json:"mintFrom"`
+	MintTo            *string      `json:"mintTo"`
+	RemainingAccounts []OKXAccount `json:"remainingAccounts"`
 }
 
 type SolanaTransactionBody struct {

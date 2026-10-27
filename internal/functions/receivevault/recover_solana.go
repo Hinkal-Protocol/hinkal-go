@@ -249,7 +249,7 @@ func recoverSolanaReceiveVault(
 		if err != nil {
 			return "", err
 		}
-		tx, err := solana.NewTransaction(instructions, latest.Value.Blockhash, solana.TransactionPayer(feePayer))
+		tx, err := solanautils.NewV1Transaction(ctx, connection, feePayer, instructions, latest.Value.Blockhash)
 		if err != nil {
 			return "", err
 		}
@@ -260,6 +260,6 @@ func recoverSolanaReceiveVault(
 		return "", err
 	}
 	return solanautils.SignAndConfirm(ctx, connection, program, func(blockhash solana.Hash) (*solana.Transaction, error) {
-		return solana.NewTransaction(instructions, blockhash, solana.TransactionPayer(feePayer))
+		return solanautils.NewV1Transaction(ctx, connection, feePayer, instructions, blockhash)
 	})
 }

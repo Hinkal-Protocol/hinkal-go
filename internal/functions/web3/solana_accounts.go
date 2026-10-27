@@ -76,19 +76,3 @@ func GetSwapperAccountPublicKeyFromSalt(programID, originalDeployer solana.Publi
 	}
 	return GetSwapperAccountPublicKey(programID, originalDeployer, additionalSeed)
 }
-
-func GetProofAccountPart1PublicKey(programID, originalDeployer, signer solana.PublicKey, id *big.Int) (solana.PublicKey, error) {
-	return mustFindPDA([][]byte{[]byte("hinkal_proof_part1"), originalDeployer.Bytes(), signer.Bytes(), bigToBE(id, 4)}, programID)
-}
-
-func GetProofAccountPart2PublicKey(programID, originalDeployer, signer solana.PublicKey, id *big.Int) (solana.PublicKey, error) {
-	return mustFindPDA([][]byte{[]byte("hinkal_proof_part2"), originalDeployer.Bytes(), signer.Bytes(), bigToBE(id, 4)}, programID)
-}
-
-func GetEncryptedOutputsAccountPublicKey(programID, originalDeployer, signer solana.PublicKey, id *big.Int) (solana.PublicKey, error) {
-	return mustFindPDA([][]byte{[]byte("hinkal_encrypted_outputs"), originalDeployer.Bytes(), signer.Bytes(), bigToBE(id, 4)}, programID)
-}
-
-func GetInstructionsAccountPublicKey(programID, originalDeployer, signer solana.PublicKey, id *big.Int) (solana.PublicKey, error) {
-	return mustFindPDA([][]byte{[]byte("hinkal_instructions"), originalDeployer.Bytes(), signer.Bytes(), bigToBE(id, 4)}, programID)
-}

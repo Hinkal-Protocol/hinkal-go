@@ -562,7 +562,6 @@ func (h *Hinkal) SwapSolana(
 		deltaAmounts,
 		salt,
 		parsed.Data.InstructionLists,
-		parsed.Data.AddressLookupTableAccount,
 		feeStructureOverride,
 		slippagePercentage,
 		pretransaction.SdkAction(pretransaction.SdkSwap),

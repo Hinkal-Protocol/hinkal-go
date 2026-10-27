@@ -151,7 +151,7 @@ type Transaction struct {
 }
 
 func (c *Client) GetTransaction(ctx context.Context, signature string) (*Transaction, error) {
-	opts := map[string]any{"commitment": "confirmed", "maxSupportedTransactionVersion": 0, "encoding": "json"}
+	opts := map[string]any{"commitment": "confirmed", "maxSupportedTransactionVersion": 1, "encoding": "json"}
 	var tx *Transaction
 	err := c.call(ctx, "getTransaction", []any{signature, opts}, &tx)
 	return tx, err
