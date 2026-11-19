@@ -14,6 +14,7 @@ import (
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/balance"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/enclave"
 	pretransaction "github.com/Hinkal-Protocol/hinkal-go/internal/functions/pre-transaction"
+	privatewallet "github.com/Hinkal-Protocol/hinkal-go/internal/functions/private-wallet"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/snarkjs"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/utils"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/types"
@@ -28,6 +29,7 @@ var (
 	errTransactUserKeysNeedInputUtxos = errors.New("transactions: HinkalTransact: UserKeys requires explicit InputUtxos")
 	errTransactEmptyInputUtxos        = errors.New("transactions: HinkalTransact: InputUtxos must contain at least one note per token")
 	errTransactSelfOutputShape        = errors.New("transactions: selfOutputAmounts only supports a single token with a single self-output")
+	errEmporiumAddressRequired        = errors.New("transactions: emporium address is required to sign an emporium transaction")
 )
 
 func padInputUtxos(userKeys *cryptokeys.UserKeys, inputUtxos [][]*utxo.Utxo) ([][]*utxo.Utxo, error) {
@@ -235,13 +237,13 @@ func prepareEnclaveJob(
 	ctx context.Context,
 	params HinkalTransactParams,
 	userKeys *cryptokeys.UserKeys,
-) (string, types.EddsaSignature, error) {
+) (types.PrepareTxResponseType, types.EddsaSignature, error) {
 	var inputCommitments []string
 	if params.Speculative == nil {
 		var err error
 		inputCommitments, err = collectInputCommitments(params.InputUtxos)
 		if err != nil {
-			return "", types.EddsaSignature{}, err
+			return types.PrepareTxResponseType{}, types.EddsaSignature{}, err
 		}
 	}
 
@@ -276,18 +278,42 @@ func prepareEnclaveJob(
 		SlippageValues:         params.SlippageValues,
 	})
 	if err != nil {
-		return "", types.EddsaSignature{}, err
+		return types.PrepareTxResponseType{}, types.EddsaSignature{}, err
 	}
 
 	signedMessageHash, err := utils.ParseBigInt(prepared.SignedMessageHash)
 	if err != nil {
-		return "", types.EddsaSignature{}, err
+		return types.PrepareTxResponseType{}, types.EddsaSignature{}, err
 	}
 	sig, err := userKeys.SignEddsa(signedMessageHash)
 	if err != nil {
-		return "", types.EddsaSignature{}, err
+		return types.PrepareTxResponseType{}, types.EddsaSignature{}, err
 	}
-	return prepared.JobID, sig, nil
+	return prepared, sig, nil
+}
+
+func signEmporiumWalletIfNeeded(
+	params HinkalTransactParams,
+	prepared types.PrepareTxResponseType,
+) (*types.EmporiumSignature, error) {
+	if params.ExternalActionID != types.ExternalActionEmporium || params.SubAccountPrivateKey == "" {
+		return nil, nil
+	}
+	if params.ExternalAddress == "" {
+		return nil, errEmporiumAddressRequired
+	}
+
+	signedMessageHash, err := utils.ParseBigInt(prepared.SignedMessageHash)
+	if err != nil {
+		return nil, err
+	}
+	signature, err := privatewallet.SignEmporiumTx(
+		params.ChainID, params.ExternalAddress, params.SubAccountPrivateKey, signedMessageHash,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &signature, nil
 }
 
 func feeStructureOrZero(fee *types.FeeStructure) types.FeeStructure {
@@ -351,28 +377,40 @@ func HinkalTransact(ctx context.Context, hinkal ihinkal.HinkalInternal, paramsIn
 	}
 
 	if hinkal.GenerateProofRemotely() && constants.IsEnclaveTxChain(params.ChainID) {
-		jobID, sig, err := prepareEnclaveJob(ctx, params, userKeys)
+		prepared, sig, err := prepareEnclaveJob(ctx, params, userKeys)
+		if err != nil {
+			return TransactResult{}, err
+		}
+		emporiumSignature, err := signEmporiumWalletIfNeeded(params, prepared)
 		if err != nil {
 			return TransactResult{}, err
 		}
 
 		if params.Submit.Mode == SubmitModeRelayer {
 			relayer := params.Submit.Relayer
-			txHash, err := enclave.FinalizeTxEnclaveCallRelay(ctx, jobID, sig, params.ChainID, enclave.FinalizeTxRelayExtra{
+			txHash, err := enclave.FinalizeTxEnclaveCallRelay(ctx, prepared.JobID, sig, params.ChainID, enclave.FinalizeTxRelayExtra{
 				AdminData:             relayer.AdminData,
 				AuthorizationData:     relayer.AuthorizationData,
 				WithUniswapWorkAround: &relayer.WithUniswapWorkAround,
+				EmporiumSignature:     emporiumSignature,
 			})
 			return TransactResult{TxHash: txHash}, err
 		}
 
-		final, err := enclave.FinalizeTxEnclaveCall(ctx, jobID, sig)
+		final, err := enclave.FinalizeTxEnclaveCall(ctx, prepared, sig)
 		if err != nil {
 			return TransactResult{}, err
 		}
 		circomData, err := snarkjs.DeserializeCircomData(final.CircomData)
 		if err != nil {
 			return TransactResult{}, err
+		}
+		if emporiumSignature != nil {
+			metadata, err := privatewallet.SetEmporiumSignatureWords(circomData.ExternalActionData.ExternalActionMetadata, *emporiumSignature)
+			if err != nil {
+				return TransactResult{}, err
+			}
+			circomData.ExternalActionData.ExternalActionMetadata = metadata
 		}
 		var tronProofSignature *api.TronProofSignature
 		if final.TronProofSignature != nil {

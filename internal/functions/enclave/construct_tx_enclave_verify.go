@@ -2,9 +2,11 @@ package enclave
 
 import (
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
+	"strconv"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -539,10 +541,11 @@ func verifyComputeAmountChangesSigned(erc20Addresses []string, amountChanges []s
 	return out, nil
 }
 
-// Matters only when onChainCreation has a true entry: DepositOnChainUtxosExternalAction.sol uses
+// Matters when onChainCreation has a true entry: DepositOnChainUtxosExternalAction.sol uses
 // this tx-level pair as the on-chain-created leaf's stealth address, so it must be caller-owned.
-func verifyAssertTxLevelStealthPairOwnedByCaller(onChainCreation []bool, h0Ax, h0Ay, outH1Ax, outH1Ay, nullifyingKey string) error {
-	if !anyTrue(onChainCreation) {
+// Emporium too: the wallet signs the stealth address derived from this pair.
+func verifyAssertTxLevelStealthPairOwnedByCaller(onChainCreation []bool, isEmporium bool, h0Ax, h0Ay, outH1Ax, outH1Ay, nullifyingKey string) error {
+	if !isEmporium && !anyTrue(onChainCreation) {
 		return nil
 	}
 	h0x, err := utils.ParseBigInt(h0Ax)
@@ -584,8 +587,12 @@ func verifyCreateCallDataHash(
 	feeStructure types.FeeStructure,
 	originalSender string,
 	createBlockedUtxos bool,
+	extraData string,
 ) (*big.Int, error) {
 	isTron := constants.IsTronLike(chainID)
+	if extraData == "" {
+		extraData = "0x"
+	}
 
 	encryptedOutputs := make([][][]byte, len(encryptedOutputsHex))
 	for i, inner := range encryptedOutputsHex {
@@ -633,12 +640,12 @@ func verifyCreateCallDataHash(
 		args2 = append(args2, abi.Argument{Type: verifyAbiFeeStructureTuple}, abi.Argument{Type: verifyAbiInt256Arr})
 		values2 = append(values2, feeStructureValue, slippageValues)
 		args2 = append(args2, abi.Argument{Type: verifyAbiAddress}, abi.Argument{Type: verifyAbiBytes}, abi.Argument{Type: verifyAbiBool})
-		values2 = append(values2, common.HexToAddress(originalSender), common.FromHex("0x"), createBlockedUtxos)
+		values2 = append(values2, common.HexToAddress(originalSender), common.FromHex(extraData), createBlockedUtxos)
 	} else {
 		args2 = append(args2, abi.Argument{Type: verifyAbiBytes}, abi.Argument{Type: verifyAbiFeeStructureTuple})
 		values2 = append(values2, common.FromHex(onChainEncryptedOutputHex), feeStructureValue)
 		args2 = append(args2, abi.Argument{Type: verifyAbiBoolArr}, abi.Argument{Type: verifyAbiAddress}, abi.Argument{Type: verifyAbiBytes})
-		values2 = append(values2, onChainCreation, common.HexToAddress(originalSender), common.FromHex("0x"))
+		values2 = append(values2, onChainCreation, common.HexToAddress(originalSender), common.FromHex(extraData))
 	}
 
 	encoded2, err := args2.Pack(values2...)
@@ -687,7 +694,7 @@ var (
 		"uint256", "address", "uint256", "uint256[]", "uint256[]",
 		"uint256", "uint256[]", "uint256[]", "uint256", "uint256",
 	}
-	verifyEvmSignedMessageHashTypes2 = []string{"uint256", "uint256", "uint256", "uint256"}
+	verifyEvmSignedMessageHashTypes2 = []string{"uint256", "uint256", "uint256", "uint256", "uint256"}
 	verifyTronSignedMessageHashTypes = []string{
 		"uint256", "uint256[]", "uint256[]",
 		"uint256", "uint256[]", "uint256[]", "uint256", "uint256",
@@ -707,6 +714,7 @@ func verifyComputeSignedMessageHashEvm(
 	rootHashHinkal *big.Int, erc20TokenAddresses []string, amountChanges []*big.Int,
 	outTimeStamp *big.Int, inNullifiersFlat, outCommitmentsFlat []*big.Int,
 	calldataHash, message, outH1Ax, outH1Ay, h0Ax, h0Ay *big.Int,
+	stealthAddress *big.Int,
 ) (*big.Int, error) {
 	hash1, err := verifyPackAndHash(verifyEvmSignedMessageHashTypes1, []any{
 		chainID, common.HexToAddress(verifyingContract), rootHashHinkal, verifyTokenAddressesAsInts(erc20TokenAddresses),
@@ -715,7 +723,7 @@ func verifyComputeSignedMessageHashEvm(
 	if err != nil {
 		return nil, fmt.Errorf("encode signed message hash (part 1): %w", err)
 	}
-	hash2, err := verifyPackAndHash(verifyEvmSignedMessageHashTypes2, []any{outH1Ax, outH1Ay, h0Ax, h0Ay})
+	hash2, err := verifyPackAndHash(verifyEvmSignedMessageHashTypes2, []any{outH1Ax, outH1Ay, h0Ax, h0Ay, stealthAddress})
 	if err != nil {
 		return nil, fmt.Errorf("encode signed message hash (part 2): %w", err)
 	}
@@ -877,7 +885,7 @@ func verifyComputeCalldataHashAndMessage(
 		externalActionIDHash, externalActionMetadata, message,
 		response.EncryptedOutputs, response.OnChainEncryptedOutput,
 		slippageValues, onChainCreation, feeStructure,
-		originalSender, payload.CreateBlockedUtxos,
+		originalSender, payload.CreateBlockedUtxos, payload.ExtraData,
 	)
 	if err != nil {
 		return
@@ -897,6 +905,7 @@ func verifyAssertSignedMessageHashMatches(
 	inNullifiers, outCommitments [][]string,
 	calldataHash, message *big.Int,
 	amountChangesModWrapped []*big.Int,
+	stealthAddress *big.Int,
 ) error {
 	rootHashHinkal, err := utils.ParseBigInt(response.RootHashHinkal)
 	if err != nil {
@@ -940,7 +949,7 @@ func verifyAssertSignedMessageHashMatches(
 			big.NewInt(int64(chainID)), hinkalAddress, rootHashHinkal,
 			response.Request.Erc20Addresses, amountChangesModWrapped, outTimeStamp,
 			inNullifiersFlat, outCommitmentsFlat, calldataHash, message,
-			outH1Ax, outH1Ay, h0Ax, h0Ay,
+			outH1Ax, outH1Ay, h0Ax, h0Ay, stealthAddress,
 		)
 	}
 	if err != nil {
@@ -954,6 +963,19 @@ func verifyAssertSignedMessageHashMatches(
 		return errors.New("enclave: prepare-tx signedMessageHash does not match one built from the caller's own data - refusing to sign")
 	}
 	return nil
+}
+
+// Derived from our own keys, so the signed hash can't bind a stealth address we don't own.
+func verifyOwnStealthAddress(h0Ax, h0Ay, nullifyingKey string, spendingPublicKey [2]string) (*big.Int, error) {
+	scalars, err := stringsToBigInts([]string{h0Ax, h0Ay, spendingPublicKey[0], spendingPublicKey[1]})
+	if err != nil {
+		return nil, err
+	}
+	stealth, err := cryptokeys.GetStealthAddress(types.JubPoint{scalars[0], scalars[1]}, nullifyingKey, scalars[2:])
+	if err != nil {
+		return nil, err
+	}
+	return utils.ParseBigInt(stealth)
 }
 
 func verifyPrepareTxResponse(chainID int, payload types.PrepareTxRequestType, response types.PrepareTxResponseType) error {
@@ -983,14 +1005,113 @@ func verifyPrepareTxResponse(chainID int, payload types.PrepareTxRequestType, re
 	if err := verifyAssertAmountsConserve(payload.Erc20Addresses, response.InAmounts, response.OutAmounts, payload.SelfOutputAmounts, payload.AmountChanges); err != nil {
 		return err
 	}
-	if err := verifyAssertTxLevelStealthPairOwnedByCaller(payload.OnChainCreation, response.H0Ax, response.H0Ay, response.OutH1Ax, response.OutH1Ay, payload.NullifyingKey); err != nil {
+	isEmporium := payload.ExternalActionID == string(types.ExternalActionEmporium)
+	if err := verifyAssertTxLevelStealthPairOwnedByCaller(payload.OnChainCreation, isEmporium, response.H0Ax, response.H0Ay, response.OutH1Ax, response.OutH1Ay, payload.NullifyingKey); err != nil {
 		return err
 	}
 	calldataHash, message, amountChangesModWrapped, err := verifyComputeCalldataHashAndMessage(chainID, payload, response, inNullifiers, outCommitments)
 	if err != nil {
 		return err
 	}
-	return verifyAssertSignedMessageHashMatches(chainID, payload.HinkalAddress, response, inNullifiers, outCommitments, calldataHash, message, amountChangesModWrapped)
+	stealthAddress, err := verifyOwnStealthAddress(response.H0Ax, response.H0Ay, payload.NullifyingKey, payload.SpendingPublicKey)
+	if err != nil {
+		return err
+	}
+	return verifyAssertSignedMessageHashMatches(chainID, payload.HinkalAddress, response, inNullifiers, outCommitments, calldataHash, message, amountChangesModWrapped, stealthAddress)
+}
+
+// Position of signedMessageHash in the Solana public signals (see snarkjs.ConvertSolanaPublicSignals).
+const solanaSignedMessageHashSignalIndex = 6
+
+// The program requires the signedMessageHash slot to equal the hash of the other public inputs,
+// so pinning that slot to the signed hash pins every hashed signal.
+func verifyFinalizeSolanaTxResponse(prepared types.PrepareSolanaTxResponseType, response types.FinalizeSolanaTxResponseType) error {
+	var args struct {
+		PublicInputsArr [][]int `json:"publicInputsArr"`
+	}
+	if err := json.Unmarshal(response.SolanaArgs, &args); err != nil {
+		return err
+	}
+	if len(args.PublicInputsArr) <= solanaSignedMessageHashSignalIndex {
+		return errors.New("enclave: finalize-solana-tx public inputs are missing signedMessageHash - refusing to submit")
+	}
+	slot := args.PublicInputsArr[solanaSignedMessageHashSignalIndex]
+	slotBytes := make([]byte, len(slot))
+	for i, b := range slot {
+		if b < 0 || b > 255 {
+			return errors.New("enclave: finalize-solana-tx public input is not a byte array - refusing to submit")
+		}
+		slotBytes[i] = byte(b)
+	}
+	expected, err := utils.ParseBigInt(prepared.SignedMessageHash)
+	if err != nil {
+		return err
+	}
+	if new(big.Int).SetBytes(slotBytes).Cmp(expected) != 0 {
+		return errors.New("enclave: finalize-solana-tx public inputs do not match the signed prepare-solana-tx data - refusing to submit")
+	}
+	return nil
+}
+
+func verifyFinalizeTxResponse(prepared types.PrepareTxResponseType, response types.FinalizeTxResponseType) error {
+	circomData := response.CircomData
+	if circomData.RootHashHinkal == nil {
+		return errors.New("enclave: finalize-tx circomData is missing rootHashHinkal - refusing to submit")
+	}
+	chainID, err := strconv.Atoi(prepared.Request.ChainID)
+	if err != nil {
+		return err
+	}
+	stealth := circomData.StealthAddressStructure
+	scalars, err := stringsToBigInts([]string{
+		*circomData.RootHashHinkal, circomData.TimeStamp, circomData.CalldataHash, circomData.EmporiumMessage,
+		stealth.H1x, stealth.H1y, stealth.H0x, stealth.H0y, prepared.SignedMessageHash,
+	})
+	if err != nil {
+		return err
+	}
+	rootHashHinkal, outTimeStamp, calldataHash, message := scalars[0], scalars[1], scalars[2], scalars[3]
+	outH1Ax, outH1Ay, h0Ax, h0Ay, expected := scalars[4], scalars[5], scalars[6], scalars[7], scalars[8]
+
+	amountChanges, err := stringsToBigInts(circomData.AmountChanges)
+	if err != nil {
+		return err
+	}
+	for i, amount := range amountChanges {
+		amountChanges[i] = verifyWrapAmountChange(amount)
+	}
+	inNullifiersFlat, err := verifyFlatToBigInts(circomData.InputNullifiers)
+	if err != nil {
+		return err
+	}
+	outCommitmentsFlat, err := verifyFlatToBigInts(circomData.OutCommitments)
+	if err != nil {
+		return err
+	}
+
+	stealthAddress, err := utils.ParseBigInt(circomData.StealthAddressStructure.StealthAddress)
+	if err != nil {
+		return err
+	}
+
+	var recomputed *big.Int
+	if constants.IsTronLike(chainID) {
+		recomputed, err = verifyComputeSignedMessageHashTron(rootHashHinkal, circomData.Erc20TokenAddresses, amountChanges, outTimeStamp, inNullifiersFlat, outCommitmentsFlat, calldataHash, message)
+	} else {
+		recomputed, err = verifyComputeSignedMessageHashEvm(
+			big.NewInt(int64(chainID)), prepared.Request.HinkalAddress, rootHashHinkal,
+			circomData.Erc20TokenAddresses, amountChanges, outTimeStamp,
+			inNullifiersFlat, outCommitmentsFlat, calldataHash, message,
+			outH1Ax, outH1Ay, h0Ax, h0Ay, stealthAddress,
+		)
+	}
+	if err != nil {
+		return err
+	}
+	if recomputed.Cmp(expected) != 0 {
+		return errors.New("enclave: finalize-tx circomData does not match the signed prepare-tx data - refusing to submit")
+	}
+	return nil
 }
 
 func verifyStuckWithdrawJobCoversFee(inputTotal, flatFee *big.Int) error {
@@ -1022,6 +1143,7 @@ func verifyStuckWithdrawJobSignedMessageHash(
 	feeStructure types.FeeStructure,
 	nullifyingKey string,
 	spendingPublicKey [2]string,
+	extraData string,
 	job types.PreparedStuckWithdrawJobType,
 	spentNullifiers map[string]struct{},
 ) error {
@@ -1088,6 +1210,7 @@ func verifyStuckWithdrawJobSignedMessageHash(
 		slippageValues, []bool{false}, feeStructure,
 		verifyGetOriginalSender(externalAddressOrZero(externalAddress), relay),
 		false,
+		extraData,
 	)
 	if err != nil {
 		return err
@@ -1106,7 +1229,11 @@ func verifyStuckWithdrawJobSignedMessageHash(
 	if isTron {
 		recomputed, err = verifyComputeSignedMessageHashTron(rootHashHinkal, []string{erc20TokenAddress}, amountChangesModWrapped, outTimeStamp, inNullifiersFlat, outCommitmentsFlat, calldataHash, message)
 	} else {
-		var outH1Ax, outH1Ay, h0Ax, h0Ay *big.Int
+		var outH1Ax, outH1Ay, h0Ax, h0Ay, stealthAddress *big.Int
+		stealthAddress, err = verifyOwnStealthAddress(job.H0Ax, job.H0Ay, nullifyingKey, spendingPublicKey)
+		if err != nil {
+			return err
+		}
 		outH1Ax, err = utils.ParseBigInt(job.OutH1Ax)
 		if err != nil {
 			return err
@@ -1123,7 +1250,7 @@ func verifyStuckWithdrawJobSignedMessageHash(
 		if err != nil {
 			return err
 		}
-		recomputed, err = verifyComputeSignedMessageHashEvm(big.NewInt(int64(chainID)), hinkalAddress, rootHashHinkal, []string{erc20TokenAddress}, amountChangesModWrapped, outTimeStamp, inNullifiersFlat, outCommitmentsFlat, calldataHash, message, outH1Ax, outH1Ay, h0Ax, h0Ay)
+		recomputed, err = verifyComputeSignedMessageHashEvm(big.NewInt(int64(chainID)), hinkalAddress, rootHashHinkal, []string{erc20TokenAddress}, amountChangesModWrapped, outTimeStamp, inNullifiersFlat, outCommitmentsFlat, calldataHash, message, outH1Ax, outH1Ay, h0Ax, h0Ay, stealthAddress)
 	}
 	if err != nil {
 		return err

@@ -3,6 +3,7 @@ package snarkjs
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"math/big"
 	"strings"
 
@@ -34,7 +35,7 @@ type ConstructZkProofParams struct {
 	HookData               *types.HookDataType
 	OriginalSender         string
 	SubAccountPrivateKey   string
-	ExtraData              string
+	OrderID                string
 	IsSpeculativeTree      bool
 	SlippageValues         []*big.Int
 }
@@ -212,10 +213,6 @@ func ConstructZkProof(ctx context.Context, params ConstructZkProofParams) (Const
 	var externalActionMetadata2 string
 	switch {
 	case params.ExternalActionID == types.ExternalActionEmporium:
-		emporiumAddress := params.ExternalAddress
-		if emporiumAddress == "" {
-			emporiumAddress = constants.ZeroAddress
-		}
 		subAccountSignerAddress := ""
 		if params.SubAccountPrivateKey != "" {
 			subAccountSignerAddress, err = privatewallet.SignerAddressFromPrivateKey(chainID, params.SubAccountPrivateKey)
@@ -224,7 +221,7 @@ func ConstructZkProof(ctx context.Context, params ConstructZkProofParams) (Const
 			}
 		}
 		externalActionMetadata2, err = privatewallet.EncodeEmporiumMetadata(
-			chainID, emporiumAddress, params.SubAccountPrivateKey, metadataOps, emporiumMessage, subAccountSignerAddress, params.FeeStructure.FlatFee, nil,
+			metadataOps, subAccountSignerAddress, params.FeeStructure.FlatFee, nil,
 		)
 		if err != nil {
 			return ConstructZkProofResult{}, err
@@ -235,9 +232,9 @@ func ConstructZkProof(ctx context.Context, params ConstructZkProofParams) (Const
 		externalActionMetadata2 = metadataOps[0]
 	}
 
-	extraData := params.ExtraData
-	if extraData == "" {
-		extraData = "0x"
+	extraData, err := utils.EncodeExtraData(params.OrderID)
+	if err != nil {
+		return ConstructZkProofResult{}, err
 	}
 
 	calldataHash, err := CreateCallDataHash(
@@ -262,9 +259,26 @@ func ConstructZkProof(ctx context.Context, params ConstructZkProofParams) (Const
 		OutH1Ay:             stealthAddressStructure.H1y,
 		H0Ax:                h0Ax,
 		H0Ay:                stealthAddressStructure.H0y,
+		StealthAddress:      stealthAddressStructure.StealthAddress,
 	})
 	if err != nil {
 		return ConstructZkProofResult{}, err
+	}
+
+	if params.ExternalActionID == types.ExternalActionEmporium && params.SubAccountPrivateKey != "" {
+		if params.ExternalAddress == "" {
+			return ConstructZkProofResult{}, errors.New("snarkjs: emporium address is required to sign an emporium transaction")
+		}
+		walletSignature, err := privatewallet.SignEmporiumTx(
+			chainID, params.ExternalAddress, params.SubAccountPrivateKey, signedMessageHash,
+		)
+		if err != nil {
+			return ConstructZkProofResult{}, err
+		}
+		externalActionMetadata2, err = privatewallet.SetEmporiumSignatureWords(externalActionMetadata2, walletSignature)
+		if err != nil {
+			return ConstructZkProofResult{}, err
+		}
 	}
 
 	sig, err := userKeys.SignEddsa(signedMessageHash)

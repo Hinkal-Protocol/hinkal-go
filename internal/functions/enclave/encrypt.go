@@ -32,7 +32,7 @@ func makeHandshakeForPublicKey(ctx context.Context) (string, error) {
 	if err := api.Get(ctx, constants.GetEnclaveURL()+constants.EnclaveConfig.Handshake, &signed); err != nil {
 		return "", fmt.Errorf("enclave handshake: %w", err)
 	}
-	resp, err := verifySignedEnclaveResponse[handshakeResponse](signed.Data, signed.Signature)
+	resp, err := verifySignedEnclaveResponse[handshakeResponse](ctx, signed)
 	if err != nil {
 		return "", fmt.Errorf("enclave handshake: %w", err)
 	}

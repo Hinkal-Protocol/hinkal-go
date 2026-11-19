@@ -24,6 +24,7 @@ type EvmSignedMessageHashParams struct {
 	OutH1Ay             *big.Int
 	H0Ax                *big.Int
 	H0Ay                *big.Int
+	StealthAddress      *big.Int
 }
 
 type SolanaSignedMessageHashParams struct {
@@ -100,7 +101,7 @@ func ComputeSignedMessageHashEvm(params EvmSignedMessageHashParams) (*big.Int, e
 		return nil, err
 	}
 
-	packed, err := (abi.Arguments{
+	args := abi.Arguments{
 		{Type: abiUint256},    // rootHashHinkal
 		{Type: abiUint256Arr}, // erc20TokenAddresses
 		{Type: abiUint256Arr}, // amountChanges
@@ -113,7 +114,9 @@ func ComputeSignedMessageHashEvm(params EvmSignedMessageHashParams) (*big.Int, e
 		{Type: abiUint256},    // outH1Ay
 		{Type: abiUint256},    // H0Ax
 		{Type: abiUint256},    // H0Ay
-	}).Pack(
+		{Type: abiUint256},    // stealthAddress
+	}
+	values := []any{
 		params.RootHashHinkal,
 		tokens,
 		params.AmountChanges,
@@ -126,7 +129,9 @@ func ComputeSignedMessageHashEvm(params EvmSignedMessageHashParams) (*big.Int, e
 		params.OutH1Ay,
 		params.H0Ax,
 		params.H0Ay,
-	)
+		params.StealthAddress,
+	}
+	packed, err := args.Pack(values...)
 	if err != nil {
 		return nil, fmt.Errorf("signed message hash encode: %w", err)
 	}

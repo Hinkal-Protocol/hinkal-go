@@ -37,7 +37,7 @@ func allocateRecipientInfosEnclaveCall(ctx context.Context, recipientAddresses [
 	if err != nil {
 		return allocateRecipientInfosResponse{}, err
 	}
-	response, err := verifySignedEnclaveResponse[allocateRecipientInfosResponse](signed.Data, signed.Signature)
+	response, err := verifySignedEnclaveResponse[allocateRecipientInfosResponse](ctx, signed)
 	if err != nil {
 		return allocateRecipientInfosResponse{}, err
 	}

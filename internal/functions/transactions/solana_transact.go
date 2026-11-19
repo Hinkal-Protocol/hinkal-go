@@ -347,13 +347,13 @@ func prepareSolanaEnclaveJob(
 	ctx context.Context,
 	params HinkalSolanaTransactParams,
 	userKeys *cryptokeys.UserKeys,
-) (string, types.EddsaSignature, error) {
+) (types.PrepareSolanaTxResponseType, types.EddsaSignature, error) {
 	var inputCommitments []string
 	var err error
 	if params.Speculative == nil {
 		inputCommitments, err = collectInputCommitments(params.InputUtxos)
 		if err != nil {
-			return "", types.EddsaSignature{}, err
+			return types.PrepareSolanaTxResponseType{}, types.EddsaSignature{}, err
 		}
 	}
 
@@ -361,7 +361,7 @@ func prepareSolanaEnclaveJob(
 	if params.Accounts != nil {
 		accounts, err = json.Marshal(params.Accounts)
 		if err != nil {
-			return "", types.EddsaSignature{}, err
+			return types.PrepareSolanaTxResponseType{}, types.EddsaSignature{}, err
 		}
 	}
 
@@ -392,18 +392,18 @@ func prepareSolanaEnclaveJob(
 		Speculative:          params.Speculative,
 	})
 	if err != nil {
-		return "", types.EddsaSignature{}, err
+		return types.PrepareSolanaTxResponseType{}, types.EddsaSignature{}, err
 	}
 
 	signedMessageHash, err := utils.ParseBigInt(prepared.SignedMessageHash)
 	if err != nil {
-		return "", types.EddsaSignature{}, err
+		return types.PrepareSolanaTxResponseType{}, types.EddsaSignature{}, err
 	}
 	sig, err := userKeys.SignEddsa(signedMessageHash)
 	if err != nil {
-		return "", types.EddsaSignature{}, err
+		return types.PrepareSolanaTxResponseType{}, types.EddsaSignature{}, err
 	}
-	return prepared.JobID, sig, nil
+	return prepared, sig, nil
 }
 
 func submitSolanaProof(
@@ -484,20 +484,20 @@ func solanaTransactViaEnclave(
 	params HinkalSolanaTransactParams,
 	userKeys *cryptokeys.UserKeys,
 ) (SolanaTransactResult, error) {
-	jobID, sig, err := prepareSolanaEnclaveJob(ctx, params, userKeys)
+	prepared, sig, err := prepareSolanaEnclaveJob(ctx, params, userKeys)
 	if err != nil {
 		return SolanaTransactResult{}, err
 	}
 
 	if params.Submit.Mode == SolanaSubmitModeRelayer {
-		txHash, err := enclave.FinalizeSolanaTxEnclaveCallRelay(ctx, jobID, sig, params.ChainID, params.Submit.AdminData)
+		txHash, err := enclave.FinalizeSolanaTxEnclaveCallRelay(ctx, prepared.JobID, sig, params.ChainID, params.Submit.AdminData)
 		if err != nil {
 			return SolanaTransactResult{}, err
 		}
 		return SolanaTransactResult{TxHash: txHash}, nil
 	}
 
-	final, err := enclave.FinalizeSolanaTxEnclaveCall(ctx, jobID, sig)
+	final, err := enclave.FinalizeSolanaTxEnclaveCall(ctx, prepared, sig)
 	if err != nil {
 		return SolanaTransactResult{}, err
 	}

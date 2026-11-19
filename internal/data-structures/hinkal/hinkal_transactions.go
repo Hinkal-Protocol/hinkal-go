@@ -543,6 +543,7 @@ func (h *Hinkal) SwapSolana(
 	var parsed struct {
 		api.OKXSwapResponse
 		SwapperAccountSalt string `json:"swapperAccountSalt"`
+		RouteTag           string `json:"routeTag"`
 	}
 	if err := json.Unmarshal([]byte(swapData), &parsed); err != nil {
 		return "", err
@@ -562,6 +563,7 @@ func (h *Hinkal) SwapSolana(
 		deltaAmounts,
 		salt,
 		parsed.Data.InstructionLists,
+		parsed.RouteTag,
 		feeStructureOverride,
 		slippagePercentage,
 		pretransaction.SdkAction(pretransaction.SdkSwap),

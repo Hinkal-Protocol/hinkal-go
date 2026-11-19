@@ -6,8 +6,10 @@ import (
 )
 
 type SignedEnclaveResponse struct {
-	Data      string `json:"data"`
-	Signature string `json:"signature"`
+	Data              string `json:"data"`
+	Signature         string `json:"signature"`
+	AttestedSignature string `json:"attestedSignature"`
+	Attestation       string `json:"attestation"`
 }
 
 type SpeculativeUtxo struct {
@@ -53,6 +55,7 @@ type PrepareTxParams struct {
 	Speculative            *SpeculativeTreeParams
 	SlippageValues         []*big.Int
 	ReceiveVaultAddress    string
+	OrderID                string
 }
 
 type PrepareTxRequestType struct {
@@ -81,6 +84,7 @@ type PrepareTxRequestType struct {
 	Speculative            *SpeculativeTreeParams `json:"speculative,omitempty"`
 	SlippageValues         []string               `json:"slippageValues,omitempty"`
 	ReceiveVaultAddress    string                 `json:"receiveVaultAddress,omitempty"`
+	ExtraData              string                 `json:"extraData,omitempty"`
 	NullifyingKey          string                 `json:"nullifyingKey"`
 	SpendingPublicKey      [2]string              `json:"spendingPublicKey"`
 }
@@ -109,6 +113,7 @@ type EchoedPrepareTxRequestType struct {
 	Speculative            *SpeculativeTreeParams `json:"speculative,omitempty"`
 	SlippageValues         []string               `json:"slippageValues"`
 	ReceiveVaultAddress    string                 `json:"receiveVaultAddress,omitempty"`
+	ExtraData              string                 `json:"extraData,omitempty"`
 }
 
 type PreparedJobType struct {
@@ -304,6 +309,7 @@ type PrepareStuckWithdrawRequestType struct {
 	AutoSelectRelay       bool             `json:"autoSelectRelay,omitempty"`
 	FeeStructure          FeeStructureJSON `json:"feeStructure"`
 	HashedEthereumAddress string           `json:"hashedEthereumAddress"`
+	ExtraData             string           `json:"extraData"`
 	NullifyingKey         string           `json:"nullifyingKey"`
 	SpendingPublicKey     [2]string        `json:"spendingPublicKey"`
 }
@@ -316,6 +322,7 @@ type EchoedPrepareStuckWithdrawRequestType struct {
 	Relay                 string           `json:"relay"`
 	FeeStructure          FeeStructureJSON `json:"feeStructure"`
 	HashedEthereumAddress string           `json:"hashedEthereumAddress"`
+	ExtraData             string           `json:"extraData"`
 }
 
 type PrepareStuckWithdrawResponseType struct {
@@ -359,6 +366,14 @@ type FinalizeTxRelayRequestType struct {
 	AdminData             *AdminDataType     `json:"adminData,omitempty"`
 	AuthorizationData     *AuthorizationData `json:"authorizationData,omitempty"`
 	WithUniswapWorkAround *bool              `json:"withUniswapWorkAround,omitempty"`
+	EmporiumSignature     *EmporiumSignature `json:"emporiumSignature,omitempty"`
+}
+
+// EmporiumSignature is the Emporium wallet's EIP-712 signature over a job's signedMessageHash.
+type EmporiumSignature struct {
+	V uint8  `json:"v"`
+	R string `json:"r"`
+	S string `json:"s"`
 }
 
 type FinalizeSolanaTxRelayRequestType struct {

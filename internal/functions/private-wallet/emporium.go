@@ -1,6 +1,7 @@
 package privatewallet
 
 import (
+	"bytes"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 
 	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
+	"github.com/Hinkal-Protocol/hinkal-go/internal/types"
 )
 
 type emporiumMetadataTuple struct {
@@ -39,24 +41,16 @@ var emporiumOpComponents = []abi.ArgumentMarshaling{
 	{Name: "callData", Type: "bytes"},
 }
 
+// EncodeEmporiumMetadata leaves v, r, s empty: the wallet signs after prepare (SignEmporiumTx)
+// and the signature is inserted with SetEmporiumSignatureWords.
 func EncodeEmporiumMetadata(
-	chainID int,
-	emporiumAddress string,
-	privateKey string,
 	ops []string,
-	emporiumMessage *big.Int,
 	signerAddress string,
 	maxFee *big.Int,
 	executeAfter *int,
 ) (string, error) {
-	if emporiumMessage == nil {
-		emporiumMessage = big.NewInt(0)
-	}
-
-	var v uint8
-	var r, s [32]byte
 	deadline := big.NewInt(0)
-	if privateKey != "" && signerAddress != "" {
+	if signerAddress != "" {
 		if maxFee == nil {
 			return "", errors.New("privatewallet: maxFee required if making tx from emporium")
 		}
@@ -73,11 +67,6 @@ func EncodeEmporiumMetadata(
 			}
 		}
 		deadline = big.NewInt(signedFrom.Add(emporiumSignatureDefaultTTL).Unix())
-		var err error
-		v, r, s, err = signEmporium(chainID, emporiumAddress, privateKey, ops, emporiumMessage, maxFee, deadline)
-		if err != nil {
-			return "", err
-		}
 	}
 	if signerAddress == "" {
 		signerAddress = constants.ZeroAddress
@@ -109,9 +98,6 @@ func EncodeEmporiumMetadata(
 	}
 
 	packed, err := (abi.Arguments{{Type: tupleType}}).Pack(emporiumMetadataTuple{
-		V:             v,
-		R:             r,
-		S:             s,
 		SignerAddress: common.HexToAddress(signerAddress),
 		Ops:           opStructs,
 		MaxFee:        maxFee,
@@ -124,37 +110,20 @@ func EncodeEmporiumMetadata(
 	return "0x" + hex.EncodeToString(packed), nil
 }
 
-func signEmporium(
+// SignEmporiumTx is the wallet's EIP-712 signature over a job's signedMessageHash.
+func SignEmporiumTx(
 	chainID int,
 	emporiumAddress string,
 	privateKey string,
-	ops []string,
-	emporiumMessage *big.Int,
-	maxFee *big.Int,
-	deadline *big.Int,
-) (uint8, [32]byte, [32]byte, error) {
-	var r, s [32]byte
+	signedMessageHash *big.Int,
+) (types.EmporiumSignature, error) {
 	if constants.IsSolanaLike(chainID) {
-		return 0, r, s, errors.New("privatewallet: solana does not support typed data")
+		return types.EmporiumSignature{}, errors.New("privatewallet: solana does not support typed data")
 	}
 
 	key, err := gethcrypto.HexToECDSA(strings.TrimPrefix(privateKey, "0x"))
 	if err != nil {
-		return 0, r, s, fmt.Errorf("emporium signer key: %w", err)
-	}
-
-	opsValues := make([]interface{}, len(ops))
-	for i, op := range ops {
-		operation, err := decodeEmporiumOp(op)
-		if err != nil {
-			return 0, r, s, err
-		}
-		opsValues[i] = apitypes.TypedDataMessage{
-			"endpoint":     operation.Endpoint.Hex(),
-			"invokeWallet": operation.InvokeWallet,
-			"value":        operation.Value.String(),
-			"callData":     operation.CallData,
-		}
+		return types.EmporiumSignature{}, fmt.Errorf("emporium signer key: %w", err)
 	}
 
 	typedData := apitypes.TypedData{
@@ -166,16 +135,7 @@ func signEmporium(
 				{Name: "verifyingContract", Type: "address"},
 			},
 			"EmporiumSignature": {
-				{Name: "message", Type: "uint256"},
-				{Name: "ops", Type: "EmporiumOperation[]"},
-				{Name: "maxFee", Type: "uint256"},
-				{Name: "deadline", Type: "uint256"},
-			},
-			"EmporiumOperation": {
-				{Name: "endpoint", Type: "address"},
-				{Name: "invokeWallet", Type: "bool"},
-				{Name: "value", Type: "uint128"},
-				{Name: "callData", Type: "bytes"},
+				{Name: "signedMessageHash", Type: "uint256"},
 			},
 		},
 		PrimaryType: "EmporiumSignature",
@@ -186,20 +146,17 @@ func signEmporium(
 			VerifyingContract: emporiumAddress,
 		},
 		Message: apitypes.TypedDataMessage{
-			"message":  emporiumMessage.String(),
-			"ops":      opsValues,
-			"maxFee":   maxFee.String(),
-			"deadline": deadline.String(),
+			"signedMessageHash": signedMessageHash.String(),
 		},
 	}
 
 	domainSeparator, err := typedData.HashStruct("EIP712Domain", typedData.Domain.Map())
 	if err != nil {
-		return 0, r, s, err
+		return types.EmporiumSignature{}, err
 	}
 	structHash, err := typedData.HashStruct(typedData.PrimaryType, typedData.Message)
 	if err != nil {
-		return 0, r, s, err
+		return types.EmporiumSignature{}, err
 	}
 
 	raw := append([]byte{0x19, 0x01}, domainSeparator...)
@@ -208,11 +165,42 @@ func signEmporium(
 
 	sig, err := gethcrypto.Sign(digest, key)
 	if err != nil {
-		return 0, r, s, err
+		return types.EmporiumSignature{}, err
 	}
-	copy(r[:], sig[0:32])
-	copy(s[:], sig[32:64])
-	return sig[64] + 27, r, s, nil
+	return types.EmporiumSignature{
+		V: sig[64] + 27,
+		R: "0x" + hex.EncodeToString(sig[0:32]),
+		S: "0x" + hex.EncodeToString(sig[32:64]),
+	}, nil
+}
+
+// v, r, s are the first three head words of abi.encode(EmporiumStack): bytes [32, 128).
+// The contract skips them in calldataHash (CircomDataBuilder.clearEmporiumSignature).
+const (
+	emporiumSignatureStart = 32
+	emporiumSignatureEnd   = 128
+)
+
+var errEmporiumSignatureSlotUnavailable = errors.New("privatewallet: emporium metadata has no empty signature slot")
+
+// SetEmporiumSignatureWords returns metadata with the empty v, r, s words replaced by sig.
+func SetEmporiumSignatureWords(metadata string, sig types.EmporiumSignature) (string, error) {
+	raw := common.FromHex(metadata)
+	if len(raw) < emporiumSignatureEnd {
+		return "", errEmporiumSignatureSlotUnavailable
+	}
+	slot := raw[emporiumSignatureStart:emporiumSignatureEnd]
+	if !bytes.Equal(slot, make([]byte, len(slot))) {
+		return "", errEmporiumSignatureSlotUnavailable
+	}
+	r, s := common.FromHex(sig.R), common.FromHex(sig.S)
+	if len(r) != 32 || len(s) != 32 {
+		return "", errors.New("privatewallet: invalid emporium signature")
+	}
+	slot[31] = sig.V
+	copy(slot[32:64], r)
+	copy(slot[64:96], s)
+	return "0x" + hex.EncodeToString(raw), nil
 }
 
 func SignerAddressFromPrivateKey(chainID int, privateKey string) (string, error) {

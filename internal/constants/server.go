@@ -40,3 +40,10 @@ func GetEnclaveURL() string {
 	}
 	return productionEnclaveURL
 }
+
+func GetEnclaveAttestationServiceAccount() string {
+	if Mode == DeploymentModeStaging {
+		return "staging-enclave-vm-attest@henclave-project.iam.gserviceaccount.com"
+	}
+	return "production-enclave-vm-attest@henclave-project.iam.gserviceaccount.com"
+}

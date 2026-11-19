@@ -60,6 +60,7 @@ type SolanaSwapAccounts struct {
 	MintFrom          *string      `json:"mintFrom"`
 	MintTo            *string      `json:"mintTo"`
 	RemainingAccounts []OKXAccount `json:"remainingAccounts"`
+	RouteTag          string       `json:"routeTag"`
 }
 
 type SolanaTransactionBody struct {

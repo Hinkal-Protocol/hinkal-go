@@ -258,7 +258,7 @@ func (h *Hinkal) MonitorConnectedAddress(ctx context.Context, chainID int) error
 	if err != nil {
 		return err
 	}
-	return api.Monitor(ctx, address)
+	return api.Monitor(ctx, address, chainID)
 }
 
 func (h *Hinkal) SwitchNetwork(network types.EthereumNetwork) error {

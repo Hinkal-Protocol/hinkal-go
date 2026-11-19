@@ -81,6 +81,7 @@ var RelayerConfig = struct {
 	SolanaSponsoredSubmit                    string
 	GetIdleRelay                             string
 	GetSolanaRelayAddress                    string
+	SolanaSwapData                           string
 	GetScheduledTransactions                 string
 	GetScheduledTransactionByID              func(scheduleID string) string
 	GetScheduledTransactionsNullifierIndexes string
@@ -92,6 +93,7 @@ var RelayerConfig = struct {
 	SolanaSponsoredSubmit:                    "/solana-sponsored-submit",
 	GetIdleRelay:                             "/get-idle-relay",
 	GetSolanaRelayAddress:                    "/solana-relay-address",
+	SolanaSwapData:                           "/solana-swap-data",
 	GetScheduledTransactions:                 "/scheduled-transactions",
 	GetScheduledTransactionByID:              func(scheduleID string) string { return "/scheduled-transactions/" + scheduleID },
 	GetScheduledTransactionsNullifierIndexes: "/scheduled-transactions/nullifier-indexes",

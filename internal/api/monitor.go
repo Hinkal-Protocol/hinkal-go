@@ -6,9 +6,10 @@ import (
 	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
 )
 
-func Monitor(ctx context.Context, address string) error {
+func Monitor(ctx context.Context, address string, chainID int) error {
 	body := map[string]any{
 		"address": address,
+		"chainId": chainID,
 	}
 	return Post(ctx, constants.GetServerURL()+constants.ServerConfig.Monitor, body, nil)
 }

@@ -28,6 +28,7 @@ func HinkalSolanaSwap(
 	amountChangesBase []*big.Int,
 	swapperAccountSalt *big.Int,
 	instructionLists []api.OKXSwapResponseInstruction,
+	routeTag string,
 	feeStructureOverride *types.FeeStructure,
 	slippagePercentage float64,
 	action types.AdminTransactionType,
@@ -132,6 +133,7 @@ func HinkalSolanaSwap(
 		MintFrom:          nonNativeMint(mintAddresses[0]),
 		MintTo:            nonNativeMint(mintAddresses[1]),
 		RemainingAccounts: remainingAccountsToOKX(remainingAccounts),
+		RouteTag:          routeTag,
 	}
 
 	ethereumAddress, err := hinkal.GetEthereumAddress(ctx)

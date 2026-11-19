@@ -49,6 +49,33 @@ type callOkxAPIResponse struct {
 	Message     string          `json:"message"`
 }
 
+type SolanaSwapDataRequest struct {
+	ChainID          int    `json:"chainId"`
+	FromTokenAddress string `json:"fromTokenAddress"`
+	ToTokenAddress   string `json:"toTokenAddress"`
+	Amount           string `json:"amount"`
+	SlippagePercent  string `json:"slippagePercent"`
+}
+
+type SolanaSwapDataResponse struct {
+	Status             string          `json:"status"`
+	OkxResponse        OKXSwapResponse `json:"okxResponse"`
+	SwapperAccountSalt string          `json:"swapperAccountSalt"`
+	RouteTag           string          `json:"routeTag"`
+	Error              string          `json:"error"`
+}
+
+// CallSolanaSwapData gets the OKX route for a Hinkal swap from henclave, which only relays
+// swaps whose route it fetched itself.
+func CallSolanaSwapData(ctx context.Context, req SolanaSwapDataRequest) (SolanaSwapDataResponse, error) {
+	var resp SolanaSwapDataResponse
+	url := constants.GetEnclaveURL() + constants.RelayerConfig.SolanaSwapData
+	if err := Post(ctx, url, req, &resp); err != nil {
+		return SolanaSwapDataResponse{}, err
+	}
+	return resp, nil
+}
+
 func CallOkxAPI(ctx context.Context, quote OKXQuote) (OKXSwapResponse, string, error) {
 	var resp callOkxAPIResponse
 	url := constants.GetServerURL() + constants.ServerConfig.CallOkxAPI

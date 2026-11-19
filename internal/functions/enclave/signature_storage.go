@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/Hinkal-Protocol/hinkal-go/internal/api"
+	"github.com/Hinkal-Protocol/hinkal-go/internal/types"
 )
 
 type signatureData struct {
@@ -34,10 +35,14 @@ func StoreAndGetSignatureFromEnclave(
 	if err != nil {
 		return "", err
 	}
-	if resp.Data == "" || resp.EnclaveSignature == "" {
+	if resp.Data == "" || resp.AttestedSignature == "" {
 		return "", errors.New("enclave signature response is not signed")
 	}
-	verified, err := verifySignedEnclaveResponse[signatureData](resp.Data, resp.EnclaveSignature)
+	verified, err := verifySignedEnclaveResponse[signatureData](ctx, types.SignedEnclaveResponse{
+		Data:              resp.Data,
+		AttestedSignature: resp.AttestedSignature,
+		Attestation:       resp.Attestation,
+	})
 	if err != nil {
 		return "", err
 	}

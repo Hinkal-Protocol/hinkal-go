@@ -86,9 +86,11 @@ func GetUtxosEnclaveCall(
 }
 
 type StoreAndGetSignatureResponse struct {
-	Signature        string `json:"signature"`
-	Data             string `json:"data"`
-	EnclaveSignature string `json:"enclaveSignature"`
+	Signature         string `json:"signature"`
+	Data              string `json:"data"`
+	EnclaveSignature  string `json:"enclaveSignature"`
+	AttestedSignature string `json:"attestedSignature"`
+	Attestation       string `json:"attestation"`
 }
 
 func StoreAndGetSignatureEnclaveCall(

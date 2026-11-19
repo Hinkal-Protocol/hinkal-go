@@ -7,10 +7,12 @@ import (
 	"math/big"
 	"reflect"
 	"strconv"
+	"strings"
 
 	"github.com/Hinkal-Protocol/hinkal-go/internal/api"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
 	cryptokeys "github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/crypto-keys"
+	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/utils"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/types"
 )
 
@@ -34,7 +36,7 @@ func enclavePost[T any](ctx context.Context, path string, payload any) (T, error
 	if err := api.Post(ctx, constants.GetEnclaveURL()+path, reqBody, &signed); err != nil {
 		return dest, err
 	}
-	return verifySignedEnclaveResponse[T](signed.Data, signed.Signature)
+	return verifySignedEnclaveResponse[T](ctx, signed)
 }
 
 // Like enclavePost, but for routes whose response carries nullifiers/commitments and must stay
@@ -58,7 +60,7 @@ func enclavePostSealedSigned[T any](ctx context.Context, path string, payload an
 	if err != nil {
 		return dest, err
 	}
-	return verifySignedEnclaveResponse[T](signed.Data, signed.Signature)
+	return verifySignedEnclaveResponse[T](ctx, signed)
 }
 
 func bigIntStrings(values []*big.Int) []string {
@@ -97,6 +99,10 @@ func buildPrepareTxRequest(p types.PrepareTxParams, nullifyingKey string, spendi
 	if err != nil {
 		return types.PrepareTxRequestType{}, err
 	}
+	extraData, err := utils.EncodeExtraData(p.OrderID)
+	if err != nil {
+		return types.PrepareTxRequestType{}, err
+	}
 	req := types.PrepareTxRequestType{
 		ChainID:                strconv.Itoa(p.ChainID),
 		HinkalAddress:          hinkalAddress,
@@ -122,6 +128,7 @@ func buildPrepareTxRequest(p types.PrepareTxParams, nullifyingKey string, spendi
 		NullifyingKey:          nullifyingKey,
 		SlippageValues:         nilIfEmpty(bigIntStrings(p.SlippageValues)),
 		ReceiveVaultAddress:    p.ReceiveVaultAddress,
+		ExtraData:              extraData,
 		SpendingPublicKey:      spendingPublicKey,
 	}
 	if p.FeeStructure != nil {
@@ -162,6 +169,7 @@ func assertPrepareTxEchoMatches(payload types.PrepareTxRequestType, echoed types
 		MessageSeed:            payload.MessageSeed,
 		Speculative:            payload.Speculative,
 		ReceiveVaultAddress:    payload.ReceiveVaultAddress,
+		ExtraData:              payload.ExtraData,
 	}
 	if !reflect.DeepEqual(expected, echoed) {
 		return errPrepareTxEchoMismatch
@@ -178,11 +186,37 @@ func assertPrepareStuckWithdrawEchoMatches(payload types.PrepareStuckWithdrawReq
 		Relay:                 payload.Relay,
 		FeeStructure:          payload.FeeStructure,
 		HashedEthereumAddress: payload.HashedEthereumAddress,
+		ExtraData:             payload.ExtraData,
 	}
 	if !reflect.DeepEqual(expected, echoed) {
 		return errPrepareStuckWithdrawEchoMismatch
 	}
 	return nil
+}
+
+func relayMatchesRequest(requested string, autoSelectRelay bool, actual string) bool {
+	if autoSelectRelay {
+		return true
+	}
+	if requested == "" {
+		requested = constants.ZeroAddress
+	}
+	if actual == "" {
+		actual = constants.ZeroAddress
+	}
+	return strings.EqualFold(requested, actual)
+}
+
+func messageSeedMatchesRequest(requested, actual string) bool {
+	if requested == "" {
+		return true
+	}
+	want, err := utils.ParseBigInt(requested)
+	if err != nil {
+		return false
+	}
+	got, err := utils.ParseBigInt(actual)
+	return err == nil && want.Cmp(got) == 0
 }
 
 func PrepareTxEnclaveCall(ctx context.Context, uk *cryptokeys.UserKeys, params types.PrepareTxParams) (types.PrepareTxResponseType, error) {
@@ -206,6 +240,9 @@ func PrepareTxEnclaveCall(ctx context.Context, uk *cryptokeys.UserKeys, params t
 	}
 	if err := assertPrepareTxEchoMatches(payload, resp.Request); err != nil {
 		return types.PrepareTxResponseType{}, err
+	}
+	if !relayMatchesRequest(payload.Relay, payload.AutoSelectRelay, resp.Relay) || !messageSeedMatchesRequest(payload.MessageSeed, resp.MessageSeed) {
+		return types.PrepareTxResponseType{}, errPrepareTxEchoMismatch
 	}
 	if err := verifyPrepareTxResponse(params.ChainID, payload, resp); err != nil {
 		return types.PrepareTxResponseType{}, err
@@ -236,6 +273,10 @@ func PrepareStuckWithdrawEnclaveCall(ctx context.Context, uk *cryptokeys.UserKey
 	if err != nil {
 		return nil, err
 	}
+	extraData, err := utils.EncodeExtraData("")
+	if err != nil {
+		return nil, err
+	}
 	payload := types.PrepareStuckWithdrawRequestType{
 		ChainID:         strconv.Itoa(params.ChainID),
 		HinkalAddress:   hinkalAddress,
@@ -249,6 +290,7 @@ func PrepareStuckWithdrawEnclaveCall(ctx context.Context, uk *cryptokeys.UserKey
 			VariableRate: params.FeeStructure.VariableRate.String(),
 		},
 		HashedEthereumAddress: params.HashedEthereumAddress,
+		ExtraData:             extraData,
 		NullifyingKey:         nullifyingKey,
 		SpendingPublicKey:     [2]string{pair.PubSpendingBJJPoint[0].String(), pair.PubSpendingBJJPoint[1].String()},
 	}
@@ -261,7 +303,10 @@ func PrepareStuckWithdrawEnclaveCall(ctx context.Context, uk *cryptokeys.UserKey
 	}
 	spentNullifiers := map[string]struct{}{}
 	for _, job := range resp.Jobs {
-		if err := verifyStuckWithdrawJobSignedMessageHash(params.ChainID, hinkalAddress, params.Erc20Address, params.ExternalAddress, params.FeeStructure, nullifyingKey, payload.SpendingPublicKey, job, spentNullifiers); err != nil {
+		if !relayMatchesRequest(payload.Relay, payload.AutoSelectRelay, job.Relay) {
+			return nil, errPrepareStuckWithdrawEchoMismatch
+		}
+		if err := verifyStuckWithdrawJobSignedMessageHash(params.ChainID, hinkalAddress, params.Erc20Address, params.ExternalAddress, params.FeeStructure, nullifyingKey, payload.SpendingPublicKey, payload.ExtraData, job, spentNullifiers); err != nil {
 			return nil, err
 		}
 	}
@@ -275,18 +320,26 @@ func eddsaSignatureWire(sig types.EddsaSignature) types.EddsaSignatureWire {
 	}
 }
 
-func FinalizeTxEnclaveCall(ctx context.Context, jobID string, sig types.EddsaSignature) (types.FinalizeTxResponseType, error) {
+func FinalizeTxEnclaveCall(ctx context.Context, prepared types.PrepareTxResponseType, sig types.EddsaSignature) (types.FinalizeTxResponseType, error) {
 	payload := types.FinalizeTxRequestType{
-		JobID:          jobID,
+		JobID:          prepared.JobID,
 		EddsaSignature: eddsaSignatureWire(sig),
 	}
-	return enclavePost[types.FinalizeTxResponseType](ctx, constants.EnclaveConfig.FinalizeTx, payload)
+	resp, err := enclavePost[types.FinalizeTxResponseType](ctx, constants.EnclaveConfig.FinalizeTx, payload)
+	if err != nil {
+		return types.FinalizeTxResponseType{}, err
+	}
+	if err := verifyFinalizeTxResponse(prepared, resp); err != nil {
+		return types.FinalizeTxResponseType{}, err
+	}
+	return resp, nil
 }
 
 type FinalizeTxRelayExtra struct {
 	AdminData             *types.AdminDataType
 	AuthorizationData     *types.AuthorizationData
 	WithUniswapWorkAround *bool
+	EmporiumSignature     *types.EmporiumSignature
 }
 
 func FinalizeTxEnclaveCallRelay(ctx context.Context, jobID string, sig types.EddsaSignature, chainID int, extra FinalizeTxRelayExtra) (string, error) {
@@ -297,6 +350,7 @@ func FinalizeTxEnclaveCallRelay(ctx context.Context, jobID string, sig types.Edd
 		AdminData:             extra.AdminData,
 		AuthorizationData:     extra.AuthorizationData,
 		WithUniswapWorkAround: extra.WithUniswapWorkAround,
+		EmporiumSignature:     extra.EmporiumSignature,
 	}
 	resp, err := enclavePost[types.FinalizeTxRelayResponseType](ctx, constants.EnclaveConfig.FinalizeTxRelay, payload)
 	if err != nil {

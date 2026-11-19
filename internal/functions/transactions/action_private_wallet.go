@@ -9,7 +9,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
-	"github.com/Hinkal-Protocol/hinkal-go/internal/crypto"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/hinkal/ihinkal"
 	errorhandling "github.com/Hinkal-Protocol/hinkal-go/internal/error-handling"
 	pretransaction "github.com/Hinkal-Protocol/hinkal-go/internal/functions/pre-transaction"
@@ -177,10 +176,6 @@ func actionPrivateWallet(
 
 	var externalActionMetadata []string
 	if useEnclave {
-		emporiumMessage, err := crypto.PoseidonBig(messageSeed)
-		if err != nil {
-			return "", err
-		}
 		subAccountSignerAddress := ""
 		if subAccountPrivateKey != "" {
 			subAccountSignerAddress, err = privatewallet.SignerAddressFromPrivateKey(chainID, subAccountPrivateKey)
@@ -188,7 +183,7 @@ func actionPrivateWallet(
 				return "", err
 			}
 		}
-		encoded, err := privatewallet.EncodeEmporiumMetadata(chainID, contractData.EmporiumAddress, subAccountPrivateKey, ops, emporiumMessage, subAccountSignerAddress, feeStructure.FlatFee, nil)
+		encoded, err := privatewallet.EncodeEmporiumMetadata(ops, subAccountSignerAddress, feeStructure.FlatFee, nil)
 		if err != nil {
 			return "", err
 		}

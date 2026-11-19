@@ -10,7 +10,6 @@ import (
 
 	"github.com/Hinkal-Protocol/hinkal-go/internal/api"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
-	"github.com/Hinkal-Protocol/hinkal-go/internal/crypto"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/hinkal/ihinkal"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/data-structures/utxo"
 	errorhandling "github.com/Hinkal-Protocol/hinkal-go/internal/error-handling"
@@ -253,15 +252,11 @@ func hinkalBridgeBatchPrepare(
 
 					var externalActionMetadata []string
 					if useEnclave {
-						emporiumMessage, err := crypto.PoseidonBig(messageSeed)
-						if err != nil {
-							return err
-						}
 						signerAddress, err := privatewallet.SignerAddressFromPrivateKey(chainID, recipient.TemporarySubAccount.PrivateKey)
 						if err != nil {
 							return err
 						}
-						encoded, err := privatewallet.EncodeEmporiumMetadata(chainID, contractData.EmporiumAddress, recipient.TemporarySubAccount.PrivateKey, ops, emporiumMessage, signerAddress, feeStructure.FlatFee, txCompletionTime)
+						encoded, err := privatewallet.EncodeEmporiumMetadata(ops, signerAddress, feeStructure.FlatFee, txCompletionTime)
 						if err != nil {
 							return err
 						}

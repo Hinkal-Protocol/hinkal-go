@@ -16,6 +16,28 @@ import (
 	"github.com/Hinkal-Protocol/hinkal-go/internal/types"
 )
 
+func deriveTemporarySubAccount(hinkal ihinkal.HinkalInternal, selectedChainID int) (types.TemporarySubAccount, error) {
+	nonce, err := utils.RandomBigInt(6)
+	if err != nil {
+		return types.TemporarySubAccount{}, err
+	}
+	sourceSubAccount, err := privatewallet.BuildTempSubAccountForChain(hinkal.GetUserKeys(), selectedChainID, nonce, false)
+	if err != nil {
+		return types.TemporarySubAccount{}, err
+	}
+	walletPrivateKey := sourceSubAccount.PrivateKey
+	sourceAddress, _ := privatewallet.AddressFromSubAccount(selectedChainID, sourceSubAccount)
+	if walletPrivateKey == "" || sourceAddress == "" {
+		return types.TemporarySubAccount{}, errors.New("Failed to derive source temp wallet")
+	}
+
+	return types.TemporarySubAccount{
+		Index:      int(nonce.Int64()),
+		EthAddress: sourceAddress,
+		PrivateKey: walletPrivateKey,
+	}, nil
+}
+
 func getLifiBridgeRecipient(
 	ctx context.Context,
 	hinkal ihinkal.HinkalInternal,
@@ -26,25 +48,17 @@ func getLifiBridgeRecipient(
 	amount string,
 	tokenPriceDollar float64,
 	slippagePercentOverride *float64,
+	temporarySubAccount *types.TemporarySubAccount,
 ) (types.BridgeRecipient, error) {
-	nonce, err := utils.RandomBigInt(6)
-	if err != nil {
-		return types.BridgeRecipient{}, err
-	}
-	sourceSubAccount, err := privatewallet.BuildTempSubAccountForChain(hinkal.GetUserKeys(), selectedChainID, nonce, false)
-	if err != nil {
-		return types.BridgeRecipient{}, err
-	}
-	walletPrivateKey := sourceSubAccount.PrivateKey
-	sourceAddress, _ := privatewallet.AddressFromSubAccount(selectedChainID, sourceSubAccount)
-	if walletPrivateKey == "" || sourceAddress == "" {
-		return types.BridgeRecipient{}, errors.New("Failed to derive source temp wallet")
-	}
-
-	temporarySubAccount := types.TemporarySubAccount{
-		Index:      int(nonce.Int64()),
-		EthAddress: sourceAddress,
-		PrivateKey: walletPrivateKey,
+	var subAccount types.TemporarySubAccount
+	if temporarySubAccount != nil {
+		subAccount = *temporarySubAccount
+	} else {
+		derived, err := deriveTemporarySubAccount(hinkal, selectedChainID)
+		if err != nil {
+			return types.BridgeRecipient{}, err
+		}
+		subAccount = derived
 	}
 
 	slippagePercent := getBridgingSlippagePercent(amount, tokenPriceDollar)
@@ -58,7 +72,7 @@ func getLifiBridgeRecipient(
 		destToken,
 		amount,
 		slippagePercent*0.01, // LIFI needs number between 0 and 1
-		temporarySubAccount.EthAddress,
+		subAccount.EthAddress,
 		recipient,
 	)
 	if err != nil {
@@ -73,7 +87,7 @@ func getLifiBridgeRecipient(
 		RecipientAddress:    recipient,
 		BridgeAmount:        bridgeAmount,
 		Quote:               quote,
-		TemporarySubAccount: temporarySubAccount,
+		TemporarySubAccount: subAccount,
 	}, nil
 }
 
@@ -119,6 +133,7 @@ func getLifiBridgeRecipients(
 				web3.GetAmountInToken(sourceToken, recipientAmounts[i]),
 				tokenPriceDollar,
 				slippagePercent,
+				nil,
 			)
 			if err != nil {
 				return err

@@ -7,11 +7,8 @@ import (
 	"fmt"
 	"math/big"
 
-	solana "github.com/gagliardetto/solana-go"
-
 	"github.com/Hinkal-Protocol/hinkal-go/internal/api"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/constants"
-	"github.com/Hinkal-Protocol/hinkal-go/internal/functions/utils"
 	"github.com/Hinkal-Protocol/hinkal-go/internal/types"
 )
 
@@ -36,53 +33,29 @@ func GetOKXPrice(
 		return OKXPrice{}, errOKXSolanaOnly
 	}
 
-	swapperAccountSalt, err := utils.RandomBigInt(31)
-	if err != nil {
-		return OKXPrice{}, err
-	}
 	inSwapAmountWei, err := GetAmountInWei(inSwapToken, inSwapAmount)
 	if err != nil {
 		return OKXPrice{}, err
 	}
 
-	hinkalAddressStr, err := constants.HinkalAddress(chainID)
+	// The relayer only relays Hinkal swaps whose route it fetched itself, so the route comes from it.
+	route, err := api.CallSolanaSwapData(ctx, api.SolanaSwapDataRequest{
+		ChainID:          chainID,
+		FromTokenAddress: inSwapToken.Erc20TokenAddress,
+		ToTokenAddress:   outSwapToken.Erc20TokenAddress,
+		Amount:           inSwapAmountWei.String(),
+		SlippagePercent:  fmt.Sprintf("%v", slippagePercentage),
+	})
 	if err != nil {
 		return OKXPrice{}, err
 	}
-	hinkalProgramAddress, err := solana.PublicKeyFromBase58(hinkalAddressStr)
-	if err != nil {
-		return OKXPrice{}, err
-	}
-	originalDeployerStr, err := constants.OriginalDeployer(chainID)
-	if err != nil {
-		return OKXPrice{}, err
-	}
-	originalDeployer, err := solana.PublicKeyFromBase58(originalDeployerStr)
-	if err != nil {
-		return OKXPrice{}, err
-	}
-	swapperAccount, err := GetSwapperAccountPublicKeyFromSalt(hinkalProgramAddress, originalDeployer, swapperAccountSalt)
-	if err != nil {
-		return OKXPrice{}, err
-	}
-
-	quote := api.OKXQuote{
-		Amount:            inSwapAmountWei.String(),
-		ChainIndex:        "501", // Solana mainnet
-		FromTokenAddress:  inSwapToken.Erc20TokenAddress,
-		ToTokenAddress:    outSwapToken.Erc20TokenAddress,
-		UserWalletAddress: swapperAccount.String(),
-		SlippagePercent:   fmt.Sprintf("%v", slippagePercentage),
-		DirectRoute:       true,
-	}
-
-	okxResponse, status, err := api.CallOkxAPI(ctx, quote)
-	if err != nil {
-		return OKXPrice{}, err
-	}
-	if status != "success" {
+	if route.Status != "success" {
+		if route.Error != "" {
+			return OKXPrice{}, errors.New(route.Error)
+		}
 		return OKXPrice{}, errOKXFetch
 	}
+	okxResponse := route.OkxResponse
 	if okxResponse.Code != "0" {
 		return OKXPrice{}, fmt.Errorf("OKX API error: %s", okxResponse.Msg)
 	}
@@ -95,7 +68,8 @@ func GetOKXPrice(
 	okxData, err := json.Marshal(struct {
 		api.OKXSwapResponse
 		SwapperAccountSalt string `json:"swapperAccountSalt"`
-	}{OKXSwapResponse: okxResponse, SwapperAccountSalt: swapperAccountSalt.String()})
+		RouteTag           string `json:"routeTag"`
+	}{OKXSwapResponse: okxResponse, SwapperAccountSalt: route.SwapperAccountSalt, RouteTag: route.RouteTag})
 	if err != nil {
 		return OKXPrice{}, err
 	}

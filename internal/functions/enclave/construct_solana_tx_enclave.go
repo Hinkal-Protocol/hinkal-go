@@ -152,6 +152,9 @@ func PrepareSolanaTxEnclaveCall(
 	if err := assertPrepareSolanaTxEchoMatches(payload, resp.Request); err != nil {
 		return types.PrepareSolanaTxResponseType{}, err
 	}
+	if !messageSeedMatchesRequest(payload.MessageSeed, resp.MessageSeed) {
+		return types.PrepareSolanaTxResponseType{}, errPrepareSolanaTxEchoMismatch
+	}
 	if err := verifyPrepareSolanaTxResponse(payload, resp); err != nil {
 		return types.PrepareSolanaTxResponseType{}, err
 	}
@@ -159,12 +162,19 @@ func PrepareSolanaTxEnclaveCall(
 }
 
 // Part 2: finishes the witness with the signature, runs proof gen and hands the args back.
-func FinalizeSolanaTxEnclaveCall(ctx context.Context, jobID string, sig types.EddsaSignature) (types.FinalizeSolanaTxResponseType, error) {
+func FinalizeSolanaTxEnclaveCall(ctx context.Context, prepared types.PrepareSolanaTxResponseType, sig types.EddsaSignature) (types.FinalizeSolanaTxResponseType, error) {
 	payload := types.FinalizeTxRequestType{
-		JobID:          jobID,
+		JobID:          prepared.JobID,
 		EddsaSignature: eddsaSignatureWire(sig),
 	}
-	return enclavePost[types.FinalizeSolanaTxResponseType](ctx, constants.EnclaveConfig.FinalizeSolanaTx, payload)
+	resp, err := enclavePost[types.FinalizeSolanaTxResponseType](ctx, constants.EnclaveConfig.FinalizeSolanaTx, payload)
+	if err != nil {
+		return types.FinalizeSolanaTxResponseType{}, err
+	}
+	if err := verifyFinalizeSolanaTxResponse(prepared, resp); err != nil {
+		return types.FinalizeSolanaTxResponseType{}, err
+	}
+	return resp, nil
 }
 
 // Relayed counterpart to FinalizeSolanaTxEnclaveCall: henclave posts straight to the relayer.
@@ -256,6 +266,9 @@ func PrepareSolanaStuckWithdrawEnclaveCall(
 	}
 	spentNullifiers := map[string]struct{}{}
 	for _, job := range resp.Jobs {
+		if !payload.AutoSelectRelay && job.Relay != payload.RelayAddress {
+			return nil, errPrepareSolanaStuckWithdrawEchoMismatch
+		}
 		nullifierCount := 0
 		for _, amount := range job.InAmounts[0] {
 			v, err := utils.ParseBigInt(amount)
